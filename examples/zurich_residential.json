@@ -1,0 +1,25 @@
+{
+  "property": {
+    "name": "Limmat Residential Case",
+    "location": "Zürich, Switzerland",
+    "purchase_price": 15000000,
+    "potential_gross_rent": 900000,
+    "vacancy_rate": 0.04,
+    "operating_expenses": 220000,
+    "other_income": 20000,
+    "market_cap_rate": 0.0425,
+    "rent_growth_rate": 0.018,
+    "expense_growth_rate": 0.02,
+    "discount_rate": 0.06,
+    "exit_cap_rate": 0.045,
+    "selling_cost_rate": 0.012,
+    "holding_period_years": 5,
+    "capex_by_year": [0, 150000, 800000, 250000, 0]
+  },
+  "financing": {
+    "loan_to_value": 0.6,
+    "interest_rate": 0.035,
+    "annual_amortization_rate": 0.01
+  }
+}
+
