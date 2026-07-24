@@ -28,9 +28,38 @@ an Investment Committee memo.
 - Rule-based risk register with evidence and required actions
 - Preliminary recommendation and maximum supported price
 - Downloadable Investment Committee memo in PDF format
+- Separate development-feasibility module for land acquisitions
+- Plan A / Plan B use-mix and probability comparison
+- Gross development value and residual land valuation
+- Maximum supportable land price at the selected target return
+- Development-cost schedule, NPV, IRR and profit margin
+- Construction-cost/revenue sensitivity matrix
 
 Core calculations are separated from the user interface so an interviewer can
 audit the methodology instead of treating the outputs as a black box.
+
+## Development-feasibility module
+
+The eighth app tab evaluates a development site before acquisition. Enter the
+plot, permitted density, efficiency, timing, construction costs and market
+assumptions for two alternative development plans. Each plan can combine:
+
+- Residential units held for rent
+- Condominiums built for sale
+- Commercial space held for rent
+- Rental and for-sale parking
+
+The module capitalizes stabilized rental income, adds unit-sale proceeds,
+deducts selling and development costs, discounts the cash flows and calculates
+the residual land value. The headline output is the maximum land purchase price
+that makes NPV equal to zero at the selected discount rate, including land
+acquisition costs. A 5x5 sensitivity matrix shows how this limit changes when
+construction costs and revenues move by plus or minus 5% and 10%.
+
+Plan probabilities must total 100%. They produce a probability-weighted land
+value, while the app separately identifies the plan with the highest residual
+value. All results are preliminary decision-support outputs, not a certified
+valuation.
 
 ## Included case
 
@@ -91,7 +120,11 @@ python3 -m unittest discover -s tests -v
 - Scheduled amortization is based on the original loan amount.
 - Terminal value uses the following year's NOI divided by the exit cap rate.
 - Selling costs are deducted from terminal value.
-- Taxes and acquisition costs are outside the first-deliverable scope.
+- Acquisition underwriting excludes taxes and acquisition costs.
+- Development construction costs are spread evenly over the selected build
+  period and inflated annually.
+- Development completion value is realized at the end of the final build year.
+- Development land acquisition costs are applied to the land purchase price.
 
 These conventions are explicit so an interviewer can audit the model instead
 of treating it as a black box.
