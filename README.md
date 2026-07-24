@@ -5,6 +5,15 @@ estate. It combines an auditable Python valuation engine with a Streamlit
 interface, scenario analysis, transparent market evidence, a risk register and
 an Investment Committee memo.
 
+The interface is organized by investment strategy:
+
+- **Core Acquisition** for stabilized income-producing properties
+- **Value-Add / Repositioning** for renovation, lease-up and operational change
+- **Ground-Up Development** for land acquisition and new construction
+
+Only the workflow relevant to the selected strategy is displayed. The
+Value-Add engine is identified in the interface as the next model to be built.
+
 ## What the engine calculates
 
 - Effective rental income and vacancy loss

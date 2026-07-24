@@ -58,13 +58,643 @@ def percentage(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2%}"
 
 
+def render_development_workflow() -> None:
+    st.subheader("Development feasibility & residual land value")
+    st.caption(
+        "Test alternative development concepts and calculate the maximum land price "
+        "that still meets the target return."
+    )
+    st.warning(
+        "Decision-support prototype only. Outputs depend on the assumptions entered "
+        "and do not constitute a certified valuation."
+    )
+
+    st.markdown("#### 1 · Site and project assumptions")
+    project_col_1, project_col_2, project_col_3 = st.columns(3)
+    with project_col_1:
+        dev_project_name = st.text_input(
+            "Project name",
+            "Limmat Development Site",
+            key="dev_project_name",
+        )
+        dev_location = st.text_input(
+            "Location",
+            "Zürich, Switzerland",
+            key="dev_location",
+        )
+        dev_asking_land_price = st.number_input(
+            "Asking land price (CHF)",
+            min_value=0.0,
+            value=5_000_000.0,
+            step=100_000.0,
+            key="dev_asking_land_price",
+        )
+        dev_land_acquisition_cost_pct = st.number_input(
+            "Land acquisition costs (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=3.0,
+            step=0.25,
+            key="dev_land_acquisition_cost_pct",
+        )
+    with project_col_2:
+        dev_plot_size = st.number_input(
+            "Plot size (sqm)",
+            min_value=1.0,
+            value=2_000.0,
+            step=100.0,
+            key="dev_plot_size",
+        )
+        dev_density = st.number_input(
+            "Permitted density ratio",
+            min_value=0.01,
+            value=1.60,
+            step=0.05,
+            key="dev_density",
+        )
+        dev_efficiency_pct = st.number_input(
+            "Floor-space efficiency (%)",
+            min_value=1.0,
+            max_value=100.0,
+            value=80.0,
+            step=1.0,
+            key="dev_efficiency_pct",
+        )
+        dev_discount_rate_pct = st.number_input(
+            "Target discount rate (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=8.0,
+            step=0.25,
+            key="dev_discount_rate_pct",
+        )
+    with project_col_3:
+        dev_cost_inflation_pct = st.number_input(
+            "Construction-cost inflation (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=2.5,
+            step=0.25,
+            key="dev_cost_inflation_pct",
+        )
+        dev_revenue_growth_pct = st.number_input(
+            "Revenue growth until completion (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=1.5,
+            step=0.25,
+            key="dev_revenue_growth_pct",
+        )
+        dev_professional_fees_pct = st.number_input(
+            "Professional fees (% of construction)",
+            min_value=0.0,
+            max_value=100.0,
+            value=10.0,
+            step=0.5,
+            key="dev_professional_fees_pct",
+        )
+        dev_contingency_pct = st.number_input(
+            "Contingency (% of construction)",
+            min_value=0.0,
+            max_value=100.0,
+            value=7.5,
+            step=0.5,
+            key="dev_contingency_pct",
+        )
+        dev_selling_cost_pct = st.number_input(
+            "Selling costs (% of GDV)",
+            min_value=0.0,
+            max_value=100.0,
+            value=2.0,
+            step=0.25,
+            key="dev_selling_cost_pct",
+        )
+
+    development_project = DevelopmentProject(
+        name=dev_project_name,
+        location=dev_location,
+        asking_land_price=dev_asking_land_price,
+        plot_size_sqm=dev_plot_size,
+        density_ratio=dev_density,
+        floor_space_efficiency=dev_efficiency_pct / 100,
+        discount_rate=dev_discount_rate_pct / 100,
+        construction_cost_inflation=dev_cost_inflation_pct / 100,
+        revenue_growth_rate=dev_revenue_growth_pct / 100,
+        professional_fees_rate=dev_professional_fees_pct / 100,
+        contingency_rate=dev_contingency_pct / 100,
+        selling_cost_rate=dev_selling_cost_pct / 100,
+        land_acquisition_cost_rate=dev_land_acquisition_cost_pct / 100,
+    )
+    area_col_1, area_col_2 = st.columns(2)
+    area_col_1.metric(
+        "Gross floor area (GFA)",
+        f"{development_project.gross_floor_area_sqm:,.0f} sqm",
+    )
+    area_col_2.metric(
+        "Net floor area (NFA)",
+        f"{development_project.net_floor_area_sqm:,.0f} sqm",
+    )
+
+    st.markdown("#### 2 · Alternative development plans")
+
+    def development_plan_inputs(
+        *,
+        prefix: str,
+        name: str,
+        probability: float,
+        years: int,
+        residential_share: float,
+        condo_share: float,
+        commercial_share: float,
+        residential_rent: float,
+        condo_price: float,
+        commercial_rent: float,
+        residential_cost: float,
+        condo_cost: float,
+        commercial_cost: float,
+        rental_parking: int,
+        sale_parking: int,
+    ) -> tuple[DevelopmentPlan | None, float]:
+        st.markdown(f"##### {name}")
+        basic_1, basic_2 = st.columns(2)
+        with basic_1:
+            probability_pct = st.number_input(
+                "Probability (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=probability,
+                step=5.0,
+                key=f"{prefix}_probability",
+            )
+        with basic_2:
+            development_years = st.number_input(
+                "Years to completion",
+                min_value=1,
+                max_value=20,
+                value=years,
+                step=1,
+                key=f"{prefix}_years",
+            )
+
+        st.caption("Use mix — must total 100%")
+        mix_1, mix_2, mix_3 = st.columns(3)
+        residential_share_pct = mix_1.number_input(
+            "Residential rental (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=residential_share,
+            step=5.0,
+            key=f"{prefix}_residential_share",
+        )
+        condo_share_pct = mix_2.number_input(
+            "Condominium sales (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=condo_share,
+            step=5.0,
+            key=f"{prefix}_condo_share",
+        )
+        commercial_share_pct = mix_3.number_input(
+            "Commercial rental (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=commercial_share,
+            step=5.0,
+            key=f"{prefix}_commercial_share",
+        )
+        use_total = (
+            residential_share_pct + condo_share_pct + commercial_share_pct
+        )
+        if abs(use_total - 100.0) > 0.001:
+            st.error(f"{name} use mix currently totals {use_total:.1f}%, not 100%.")
+
+        st.caption("Market assumptions")
+        market_1, market_2, market_3 = st.columns(3)
+        residential_rent_value = market_1.number_input(
+            "Residential rent (CHF/sqm/year)",
+            min_value=0.0,
+            value=residential_rent,
+            step=10.0,
+            key=f"{prefix}_residential_rent",
+        )
+        condo_price_value = market_2.number_input(
+            "Condo selling price (CHF/sqm)",
+            min_value=0.0,
+            value=condo_price,
+            step=100.0,
+            key=f"{prefix}_condo_price",
+        )
+        commercial_rent_value = market_3.number_input(
+            "Commercial rent (CHF/sqm/year)",
+            min_value=0.0,
+            value=commercial_rent,
+            step=10.0,
+            key=f"{prefix}_commercial_rent",
+        )
+        cap_1, cap_2 = st.columns(2)
+        residential_cap_pct = cap_1.number_input(
+            "Residential exit cap rate (%)",
+            min_value=0.01,
+            max_value=100.0,
+            value=3.75,
+            step=0.10,
+            key=f"{prefix}_residential_cap",
+        )
+        commercial_cap_pct = cap_2.number_input(
+            "Commercial exit cap rate (%)",
+            min_value=0.01,
+            max_value=100.0,
+            value=4.75,
+            step=0.10,
+            key=f"{prefix}_commercial_cap",
+        )
+
+        st.caption("Construction and parking assumptions")
+        cost_1, cost_2, cost_3 = st.columns(3)
+        residential_cost_value = cost_1.number_input(
+            "Residential rental cost (CHF/sqm)",
+            min_value=0.0,
+            value=residential_cost,
+            step=100.0,
+            key=f"{prefix}_residential_cost",
+        )
+        condo_cost_value = cost_2.number_input(
+            "Condo construction cost (CHF/sqm)",
+            min_value=0.0,
+            value=condo_cost,
+            step=100.0,
+            key=f"{prefix}_condo_cost",
+        )
+        commercial_cost_value = cost_3.number_input(
+            "Commercial construction cost (CHF/sqm)",
+            min_value=0.0,
+            value=commercial_cost,
+            step=100.0,
+            key=f"{prefix}_commercial_cost",
+        )
+        parking_1, parking_2, parking_3, parking_4 = st.columns(4)
+        rental_parking_value = parking_1.number_input(
+            "Rental spaces",
+            min_value=0,
+            value=rental_parking,
+            step=1,
+            key=f"{prefix}_rental_parking",
+        )
+        parking_rent_value = parking_2.number_input(
+            "Rent/space/year (CHF)",
+            min_value=0.0,
+            value=2_400.0,
+            step=100.0,
+            key=f"{prefix}_parking_rent",
+        )
+        sale_parking_value = parking_3.number_input(
+            "Spaces for sale",
+            min_value=0,
+            value=sale_parking,
+            step=1,
+            key=f"{prefix}_sale_parking",
+        )
+        parking_sale_price_value = parking_4.number_input(
+            "Sale price/space (CHF)",
+            min_value=0.0,
+            value=60_000.0,
+            step=2_500.0,
+            key=f"{prefix}_parking_sale_price",
+        )
+
+        if abs(use_total - 100.0) > 0.001:
+            return None, probability_pct
+        return (
+            DevelopmentPlan(
+                name=name,
+                probability=probability_pct / 100,
+                development_years=int(development_years),
+                residential_rental_share=residential_share_pct / 100,
+                condo_sale_share=condo_share_pct / 100,
+                commercial_rental_share=commercial_share_pct / 100,
+                residential_rent_per_sqm=residential_rent_value,
+                condo_sale_price_per_sqm=condo_price_value,
+                commercial_rent_per_sqm=commercial_rent_value,
+                residential_cap_rate=residential_cap_pct / 100,
+                commercial_cap_rate=commercial_cap_pct / 100,
+                residential_cost_per_sqm=residential_cost_value,
+                condo_cost_per_sqm=condo_cost_value,
+                commercial_cost_per_sqm=commercial_cost_value,
+                rental_parking_spaces=int(rental_parking_value),
+                annual_rent_per_parking_space=parking_rent_value,
+                sale_parking_spaces=int(sale_parking_value),
+                sale_price_per_parking_space=parking_sale_price_value,
+            ),
+            probability_pct,
+        )
+
+    plan_a_tab, plan_b_tab = st.tabs(["Plan A · Income-led", "Plan B · Sell-led"])
+    with plan_a_tab:
+        plan_a, plan_a_probability = development_plan_inputs(
+            prefix="dev_a",
+            name="Plan A",
+            probability=60.0,
+            years=3,
+            residential_share=80.0,
+            condo_share=0.0,
+            commercial_share=20.0,
+            residential_rent=420.0,
+            condo_price=12_500.0,
+            commercial_rent=350.0,
+            residential_cost=5_500.0,
+            condo_cost=5_700.0,
+            commercial_cost=6_500.0,
+            rental_parking=25,
+            sale_parking=0,
+        )
+    with plan_b_tab:
+        plan_b, plan_b_probability = development_plan_inputs(
+            prefix="dev_b",
+            name="Plan B",
+            probability=40.0,
+            years=4,
+            residential_share=30.0,
+            condo_share=60.0,
+            commercial_share=10.0,
+            residential_rent=430.0,
+            condo_price=13_000.0,
+            commercial_rent=360.0,
+            residential_cost=5_700.0,
+            condo_cost=5_900.0,
+            commercial_cost=6_700.0,
+            rental_parking=10,
+            sale_parking=20,
+        )
+
+    probability_total = plan_a_probability + plan_b_probability
+    if abs(probability_total - 100.0) > 0.001:
+        st.error(
+            f"Plan probabilities currently total {probability_total:.1f}%, not 100%."
+        )
+    elif plan_a is not None and plan_b is not None:
+        comparison = compare_development_plans(
+            development_project,
+            (plan_a, plan_b),
+        )
+        st.divider()
+        st.markdown("#### 3 · Feasibility decision")
+        decision_1, decision_2, decision_3, decision_4 = st.columns(4)
+        decision_1.metric(
+            "Expected maximum land price",
+            chf(comparison.expected_maximum_land_price),
+        )
+        decision_2.metric("Seller asking price", chf(dev_asking_land_price))
+        decision_3.metric(
+            "Expected NPV at asking",
+            chf(comparison.expected_npv_at_asking_price),
+        )
+        decision_4.metric("Highest-value plan", comparison.preferred_plan_name)
+
+        if comparison.expected_npv_at_asking_price >= 0:
+            st.success(
+                f"At the current assumptions, the land is financially supportable. "
+                f"Do not pay more than approximately "
+                f"{chf(comparison.expected_maximum_land_price)} on a "
+                "probability-weighted basis."
+            )
+        else:
+            st.error(
+                f"The asking price is too high under the current assumptions. "
+                f"A probability-weighted maximum price is approximately "
+                f"{chf(comparison.expected_maximum_land_price)}."
+            )
+
+        comparison_frame = pd.DataFrame(
+            [
+                {
+                    "Plan": analysis.plan.name,
+                    "Probability": percentage(analysis.plan.probability),
+                    "GFA (sqm)": analysis.gross_floor_area_sqm,
+                    "NFA (sqm)": analysis.net_floor_area_sqm,
+                    "GDV": analysis.gross_development_value,
+                    "Development cost": analysis.total_nominal_development_cost,
+                    "Maximum land price": analysis.maximum_supportable_land_price,
+                    "NPV at asking": analysis.project_npv_at_asking_price,
+                    "IRR": percentage(analysis.project_irr_at_asking_price),
+                    "Profit margin": percentage(analysis.profit_margin_on_gdv),
+                    "Recommendation": analysis.recommendation,
+                }
+                for analysis in comparison.analyses
+            ]
+        )
+        st.dataframe(
+            comparison_frame,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "GFA (sqm)": st.column_config.NumberColumn(format="%.0f"),
+                "NFA (sqm)": st.column_config.NumberColumn(format="%.0f"),
+                "GDV": st.column_config.NumberColumn(format="CHF %.0f"),
+                "Development cost": st.column_config.NumberColumn(format="CHF %.0f"),
+                "Maximum land price": st.column_config.NumberColumn(format="CHF %.0f"),
+                "NPV at asking": st.column_config.NumberColumn(format="CHF %.0f"),
+            },
+        )
+
+        price_chart_frame = pd.DataFrame(
+            {
+                "Case": [
+                    analysis.plan.name for analysis in comparison.analyses
+                ]
+                + ["Seller asking price"],
+                "CHF": [
+                    analysis.maximum_supportable_land_price
+                    for analysis in comparison.analyses
+                ]
+                + [dev_asking_land_price],
+            }
+        )
+        price_figure = px.bar(
+            price_chart_frame,
+            x="Case",
+            y="CHF",
+            color="Case",
+            title="Maximum supportable land price by plan",
+        )
+        price_figure.update_layout(showlegend=False)
+        st.plotly_chart(price_figure, use_container_width=True)
+
+        for analysis in comparison.analyses:
+            with st.expander(f"{analysis.plan.name} · Detailed calculation"):
+                value_col, cost_col = st.columns(2)
+                with value_col:
+                    st.markdown("**Completion value**")
+                    st.write(
+                        f"Residential income value: "
+                        f"{chf(analysis.residential_income_value)}"
+                    )
+                    st.write(
+                        f"Commercial income value: "
+                        f"{chf(analysis.commercial_income_value)}"
+                    )
+                    st.write(f"Condo sales: {chf(analysis.condo_sales_value)}")
+                    st.write(f"Parking sales: {chf(analysis.parking_sales_value)}")
+                    st.write(f"Gross development value: **{chf(analysis.gross_development_value)}**")
+                with cost_col:
+                    st.markdown("**Residual calculation**")
+                    st.write(
+                        f"PV of completion proceeds: "
+                        f"{chf(analysis.present_value_of_completion_proceeds)}"
+                    )
+                    st.write(
+                        f"PV of development costs: "
+                        f"{chf(analysis.present_value_of_development_cost)}"
+                    )
+                    st.write(
+                        f"Residual before land costs: "
+                        f"{chf(analysis.residual_land_value_before_acquisition_costs)}"
+                    )
+                    st.write(
+                        f"Maximum supportable land price: "
+                        f"**{chf(analysis.maximum_supportable_land_price)}**"
+                    )
+                annual_cost_frame = pd.DataFrame(
+                    [
+                        {
+                            "Year": year.year,
+                            "Construction": year.construction_cost,
+                            "Professional fees": year.professional_fees,
+                            "Contingency": year.contingency,
+                            "Total cost": year.total_development_cost,
+                            "PV of cost": year.present_value_of_cost,
+                        }
+                        for year in analysis.development_years
+                    ]
+                )
+                st.dataframe(
+                    annual_cost_frame,
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        column: st.column_config.NumberColumn(format="CHF %.0f")
+                        for column in (
+                            "Construction",
+                            "Professional fees",
+                            "Contingency",
+                            "Total cost",
+                            "PV of cost",
+                        )
+                    },
+                )
+
+        st.markdown("#### 4 · Sensitivity of the preferred plan")
+        preferred_analysis = next(
+            analysis
+            for analysis in comparison.analyses
+            if analysis.plan.name == comparison.preferred_plan_name
+        )
+        sensitivity_points = development_sensitivity_grid(
+            development_project,
+            preferred_analysis.plan,
+        )
+        sensitivity_frame = pd.DataFrame(
+            [
+                {
+                    "Construction cost change": f"{point.construction_cost_change:+.0%}",
+                    "Revenue change": f"{point.revenue_change:+.0%}",
+                    "Maximum land price": point.maximum_supportable_land_price,
+                }
+                for point in sensitivity_points
+            ]
+        )
+        sensitivity_matrix = sensitivity_frame.pivot(
+            index="Construction cost change",
+            columns="Revenue change",
+            values="Maximum land price",
+        )
+        ordered_labels = ["-10%", "-5%", "+0%", "+5%", "+10%"]
+        sensitivity_matrix = sensitivity_matrix.reindex(
+            index=ordered_labels,
+            columns=ordered_labels,
+        )
+        sensitivity_figure = px.imshow(
+            sensitivity_matrix,
+            text_auto=",.0f",
+            aspect="auto",
+            color_continuous_scale="RdYlGn",
+            labels={
+                "x": "Revenue change",
+                "y": "Construction-cost change",
+                "color": "Max land price (CHF)",
+            },
+            title=(
+                f"{comparison.preferred_plan_name}: maximum supportable land price"
+            ),
+        )
+        st.plotly_chart(sensitivity_figure, use_container_width=True)
+        st.info(
+            "The maximum supportable land price is the purchase price that makes "
+            "NPV equal to zero at the selected target discount rate. Plan "
+            "probabilities represent alternative planning/outcome assumptions; "
+            "the highest-value plan is shown separately from the probability-weighted result."
+        )
+
+
+
 st.title("Swiss Real Estate Underwriting Copilot")
 st.caption(
-    "Preliminary underwriting for Swiss income-producing residential properties · "
-    "Acquisition and development feasibility · Portfolio MVP v0.5"
+    "Decision support for core acquisitions, value-add strategies and "
+    "ground-up developments · Portfolio MVP v0.6"
 )
 if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")
+
+
+st.markdown("### Choose your investment strategy")
+strategy_options = {
+    "Core Acquisition": (
+        "Underwrite a stabilized, income-producing property."
+    ),
+    "Value-Add / Repositioning": (
+        "Evaluate renovation, lease-up and operational value creation."
+    ),
+    "Ground-Up Development": (
+        "Test development concepts and determine the maximum land price."
+    ),
+}
+investment_strategy = st.segmented_control(
+    "Investment strategy",
+    options=list(strategy_options),
+    default="Core Acquisition",
+    selection_mode="single",
+    label_visibility="collapsed",
+    key="investment_strategy",
+)
+if investment_strategy is None:
+    investment_strategy = "Core Acquisition"
+st.caption(strategy_options[investment_strategy])
+
+if investment_strategy == "Ground-Up Development":
+    render_development_workflow()
+    st.stop()
+
+if investment_strategy == "Value-Add / Repositioning":
+    st.divider()
+    st.subheader("Value-Add / Repositioning")
+    st.caption(
+        "Underwrite an existing building that requires renovation, lease-up "
+        "or a change in operating strategy."
+    )
+    value_add_1, value_add_2, value_add_3 = st.columns(3)
+    value_add_1.markdown(
+        "**1 · Current property**\n\nIn-place NOI, occupancy, leases and debt."
+    )
+    value_add_2.markdown(
+        "**2 · Business plan**\n\nRenovation CapEx, downtime and rent uplift."
+    )
+    value_add_3.markdown(
+        "**3 · Stabilized outcome**\n\nPost-renovation value, IRR and value creation."
+    )
+    st.info(
+        "This workflow is the next calculation engine to be built. "
+        "It is shown separately now so the product architecture is clear."
+    )
+    st.stop()
 
 with st.sidebar:
     st.header("Deal")
@@ -121,7 +751,6 @@ with st.sidebar:
     comparables_tab,
     decision_tab,
     library_tab,
-    development_tab,
 ) = st.tabs(
     [
         "1 · Deal inputs",
@@ -131,7 +760,6 @@ with st.sidebar:
         "5 · Comparable properties",
         "6 · Risks & decision",
         "7 · Deal library",
-        "8 · Development feasibility",
     ]
 )
 
@@ -1227,580 +1855,3 @@ with library_tab:
         "When we publish the app online, we will replace local persistence with "
         "a hosted database or downloadable project files."
     )
-
-
-with development_tab:
-    st.subheader("Development feasibility & residual land value")
-    st.caption(
-        "Test alternative development concepts and calculate the maximum land price "
-        "that still meets the target return."
-    )
-    st.warning(
-        "Decision-support prototype only. Outputs depend on the assumptions entered "
-        "and do not constitute a certified valuation."
-    )
-
-    st.markdown("#### 1 · Site and project assumptions")
-    project_col_1, project_col_2, project_col_3 = st.columns(3)
-    with project_col_1:
-        dev_project_name = st.text_input(
-            "Project name",
-            "Limmat Development Site",
-            key="dev_project_name",
-        )
-        dev_location = st.text_input(
-            "Location",
-            "Zürich, Switzerland",
-            key="dev_location",
-        )
-        dev_asking_land_price = st.number_input(
-            "Asking land price (CHF)",
-            min_value=0.0,
-            value=5_000_000.0,
-            step=100_000.0,
-            key="dev_asking_land_price",
-        )
-        dev_land_acquisition_cost_pct = st.number_input(
-            "Land acquisition costs (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=3.0,
-            step=0.25,
-            key="dev_land_acquisition_cost_pct",
-        )
-    with project_col_2:
-        dev_plot_size = st.number_input(
-            "Plot size (sqm)",
-            min_value=1.0,
-            value=2_000.0,
-            step=100.0,
-            key="dev_plot_size",
-        )
-        dev_density = st.number_input(
-            "Permitted density ratio",
-            min_value=0.01,
-            value=1.60,
-            step=0.05,
-            key="dev_density",
-        )
-        dev_efficiency_pct = st.number_input(
-            "Floor-space efficiency (%)",
-            min_value=1.0,
-            max_value=100.0,
-            value=80.0,
-            step=1.0,
-            key="dev_efficiency_pct",
-        )
-        dev_discount_rate_pct = st.number_input(
-            "Target discount rate (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=8.0,
-            step=0.25,
-            key="dev_discount_rate_pct",
-        )
-    with project_col_3:
-        dev_cost_inflation_pct = st.number_input(
-            "Construction-cost inflation (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=2.5,
-            step=0.25,
-            key="dev_cost_inflation_pct",
-        )
-        dev_revenue_growth_pct = st.number_input(
-            "Revenue growth until completion (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=1.5,
-            step=0.25,
-            key="dev_revenue_growth_pct",
-        )
-        dev_professional_fees_pct = st.number_input(
-            "Professional fees (% of construction)",
-            min_value=0.0,
-            max_value=100.0,
-            value=10.0,
-            step=0.5,
-            key="dev_professional_fees_pct",
-        )
-        dev_contingency_pct = st.number_input(
-            "Contingency (% of construction)",
-            min_value=0.0,
-            max_value=100.0,
-            value=7.5,
-            step=0.5,
-            key="dev_contingency_pct",
-        )
-        dev_selling_cost_pct = st.number_input(
-            "Selling costs (% of GDV)",
-            min_value=0.0,
-            max_value=100.0,
-            value=2.0,
-            step=0.25,
-            key="dev_selling_cost_pct",
-        )
-
-    development_project = DevelopmentProject(
-        name=dev_project_name,
-        location=dev_location,
-        asking_land_price=dev_asking_land_price,
-        plot_size_sqm=dev_plot_size,
-        density_ratio=dev_density,
-        floor_space_efficiency=dev_efficiency_pct / 100,
-        discount_rate=dev_discount_rate_pct / 100,
-        construction_cost_inflation=dev_cost_inflation_pct / 100,
-        revenue_growth_rate=dev_revenue_growth_pct / 100,
-        professional_fees_rate=dev_professional_fees_pct / 100,
-        contingency_rate=dev_contingency_pct / 100,
-        selling_cost_rate=dev_selling_cost_pct / 100,
-        land_acquisition_cost_rate=dev_land_acquisition_cost_pct / 100,
-    )
-    area_col_1, area_col_2 = st.columns(2)
-    area_col_1.metric(
-        "Gross floor area (GFA)",
-        f"{development_project.gross_floor_area_sqm:,.0f} sqm",
-    )
-    area_col_2.metric(
-        "Net floor area (NFA)",
-        f"{development_project.net_floor_area_sqm:,.0f} sqm",
-    )
-
-    st.markdown("#### 2 · Alternative development plans")
-
-    def development_plan_inputs(
-        *,
-        prefix: str,
-        name: str,
-        probability: float,
-        years: int,
-        residential_share: float,
-        condo_share: float,
-        commercial_share: float,
-        residential_rent: float,
-        condo_price: float,
-        commercial_rent: float,
-        residential_cost: float,
-        condo_cost: float,
-        commercial_cost: float,
-        rental_parking: int,
-        sale_parking: int,
-    ) -> tuple[DevelopmentPlan | None, float]:
-        st.markdown(f"##### {name}")
-        basic_1, basic_2 = st.columns(2)
-        with basic_1:
-            probability_pct = st.number_input(
-                "Probability (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=probability,
-                step=5.0,
-                key=f"{prefix}_probability",
-            )
-        with basic_2:
-            development_years = st.number_input(
-                "Years to completion",
-                min_value=1,
-                max_value=20,
-                value=years,
-                step=1,
-                key=f"{prefix}_years",
-            )
-
-        st.caption("Use mix — must total 100%")
-        mix_1, mix_2, mix_3 = st.columns(3)
-        residential_share_pct = mix_1.number_input(
-            "Residential rental (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=residential_share,
-            step=5.0,
-            key=f"{prefix}_residential_share",
-        )
-        condo_share_pct = mix_2.number_input(
-            "Condominium sales (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=condo_share,
-            step=5.0,
-            key=f"{prefix}_condo_share",
-        )
-        commercial_share_pct = mix_3.number_input(
-            "Commercial rental (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=commercial_share,
-            step=5.0,
-            key=f"{prefix}_commercial_share",
-        )
-        use_total = (
-            residential_share_pct + condo_share_pct + commercial_share_pct
-        )
-        if abs(use_total - 100.0) > 0.001:
-            st.error(f"{name} use mix currently totals {use_total:.1f}%, not 100%.")
-
-        st.caption("Market assumptions")
-        market_1, market_2, market_3 = st.columns(3)
-        residential_rent_value = market_1.number_input(
-            "Residential rent (CHF/sqm/year)",
-            min_value=0.0,
-            value=residential_rent,
-            step=10.0,
-            key=f"{prefix}_residential_rent",
-        )
-        condo_price_value = market_2.number_input(
-            "Condo selling price (CHF/sqm)",
-            min_value=0.0,
-            value=condo_price,
-            step=100.0,
-            key=f"{prefix}_condo_price",
-        )
-        commercial_rent_value = market_3.number_input(
-            "Commercial rent (CHF/sqm/year)",
-            min_value=0.0,
-            value=commercial_rent,
-            step=10.0,
-            key=f"{prefix}_commercial_rent",
-        )
-        cap_1, cap_2 = st.columns(2)
-        residential_cap_pct = cap_1.number_input(
-            "Residential exit cap rate (%)",
-            min_value=0.01,
-            max_value=100.0,
-            value=3.75,
-            step=0.10,
-            key=f"{prefix}_residential_cap",
-        )
-        commercial_cap_pct = cap_2.number_input(
-            "Commercial exit cap rate (%)",
-            min_value=0.01,
-            max_value=100.0,
-            value=4.75,
-            step=0.10,
-            key=f"{prefix}_commercial_cap",
-        )
-
-        st.caption("Construction and parking assumptions")
-        cost_1, cost_2, cost_3 = st.columns(3)
-        residential_cost_value = cost_1.number_input(
-            "Residential rental cost (CHF/sqm)",
-            min_value=0.0,
-            value=residential_cost,
-            step=100.0,
-            key=f"{prefix}_residential_cost",
-        )
-        condo_cost_value = cost_2.number_input(
-            "Condo construction cost (CHF/sqm)",
-            min_value=0.0,
-            value=condo_cost,
-            step=100.0,
-            key=f"{prefix}_condo_cost",
-        )
-        commercial_cost_value = cost_3.number_input(
-            "Commercial construction cost (CHF/sqm)",
-            min_value=0.0,
-            value=commercial_cost,
-            step=100.0,
-            key=f"{prefix}_commercial_cost",
-        )
-        parking_1, parking_2, parking_3, parking_4 = st.columns(4)
-        rental_parking_value = parking_1.number_input(
-            "Rental spaces",
-            min_value=0,
-            value=rental_parking,
-            step=1,
-            key=f"{prefix}_rental_parking",
-        )
-        parking_rent_value = parking_2.number_input(
-            "Rent/space/year (CHF)",
-            min_value=0.0,
-            value=2_400.0,
-            step=100.0,
-            key=f"{prefix}_parking_rent",
-        )
-        sale_parking_value = parking_3.number_input(
-            "Spaces for sale",
-            min_value=0,
-            value=sale_parking,
-            step=1,
-            key=f"{prefix}_sale_parking",
-        )
-        parking_sale_price_value = parking_4.number_input(
-            "Sale price/space (CHF)",
-            min_value=0.0,
-            value=60_000.0,
-            step=2_500.0,
-            key=f"{prefix}_parking_sale_price",
-        )
-
-        if abs(use_total - 100.0) > 0.001:
-            return None, probability_pct
-        return (
-            DevelopmentPlan(
-                name=name,
-                probability=probability_pct / 100,
-                development_years=int(development_years),
-                residential_rental_share=residential_share_pct / 100,
-                condo_sale_share=condo_share_pct / 100,
-                commercial_rental_share=commercial_share_pct / 100,
-                residential_rent_per_sqm=residential_rent_value,
-                condo_sale_price_per_sqm=condo_price_value,
-                commercial_rent_per_sqm=commercial_rent_value,
-                residential_cap_rate=residential_cap_pct / 100,
-                commercial_cap_rate=commercial_cap_pct / 100,
-                residential_cost_per_sqm=residential_cost_value,
-                condo_cost_per_sqm=condo_cost_value,
-                commercial_cost_per_sqm=commercial_cost_value,
-                rental_parking_spaces=int(rental_parking_value),
-                annual_rent_per_parking_space=parking_rent_value,
-                sale_parking_spaces=int(sale_parking_value),
-                sale_price_per_parking_space=parking_sale_price_value,
-            ),
-            probability_pct,
-        )
-
-    plan_a_tab, plan_b_tab = st.tabs(["Plan A · Income-led", "Plan B · Sell-led"])
-    with plan_a_tab:
-        plan_a, plan_a_probability = development_plan_inputs(
-            prefix="dev_a",
-            name="Plan A",
-            probability=60.0,
-            years=3,
-            residential_share=80.0,
-            condo_share=0.0,
-            commercial_share=20.0,
-            residential_rent=420.0,
-            condo_price=12_500.0,
-            commercial_rent=350.0,
-            residential_cost=5_500.0,
-            condo_cost=5_700.0,
-            commercial_cost=6_500.0,
-            rental_parking=25,
-            sale_parking=0,
-        )
-    with plan_b_tab:
-        plan_b, plan_b_probability = development_plan_inputs(
-            prefix="dev_b",
-            name="Plan B",
-            probability=40.0,
-            years=4,
-            residential_share=30.0,
-            condo_share=60.0,
-            commercial_share=10.0,
-            residential_rent=430.0,
-            condo_price=13_000.0,
-            commercial_rent=360.0,
-            residential_cost=5_700.0,
-            condo_cost=5_900.0,
-            commercial_cost=6_700.0,
-            rental_parking=10,
-            sale_parking=20,
-        )
-
-    probability_total = plan_a_probability + plan_b_probability
-    if abs(probability_total - 100.0) > 0.001:
-        st.error(
-            f"Plan probabilities currently total {probability_total:.1f}%, not 100%."
-        )
-    elif plan_a is not None and plan_b is not None:
-        comparison = compare_development_plans(
-            development_project,
-            (plan_a, plan_b),
-        )
-        st.divider()
-        st.markdown("#### 3 · Feasibility decision")
-        decision_1, decision_2, decision_3, decision_4 = st.columns(4)
-        decision_1.metric(
-            "Expected maximum land price",
-            chf(comparison.expected_maximum_land_price),
-        )
-        decision_2.metric("Seller asking price", chf(dev_asking_land_price))
-        decision_3.metric(
-            "Expected NPV at asking",
-            chf(comparison.expected_npv_at_asking_price),
-        )
-        decision_4.metric("Highest-value plan", comparison.preferred_plan_name)
-
-        if comparison.expected_npv_at_asking_price >= 0:
-            st.success(
-                f"At the current assumptions, the land is financially supportable. "
-                f"Do not pay more than approximately "
-                f"{chf(comparison.expected_maximum_land_price)} on a "
-                "probability-weighted basis."
-            )
-        else:
-            st.error(
-                f"The asking price is too high under the current assumptions. "
-                f"A probability-weighted maximum price is approximately "
-                f"{chf(comparison.expected_maximum_land_price)}."
-            )
-
-        comparison_frame = pd.DataFrame(
-            [
-                {
-                    "Plan": analysis.plan.name,
-                    "Probability": percentage(analysis.plan.probability),
-                    "GFA (sqm)": analysis.gross_floor_area_sqm,
-                    "NFA (sqm)": analysis.net_floor_area_sqm,
-                    "GDV": analysis.gross_development_value,
-                    "Development cost": analysis.total_nominal_development_cost,
-                    "Maximum land price": analysis.maximum_supportable_land_price,
-                    "NPV at asking": analysis.project_npv_at_asking_price,
-                    "IRR": percentage(analysis.project_irr_at_asking_price),
-                    "Profit margin": percentage(analysis.profit_margin_on_gdv),
-                    "Recommendation": analysis.recommendation,
-                }
-                for analysis in comparison.analyses
-            ]
-        )
-        st.dataframe(
-            comparison_frame,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "GFA (sqm)": st.column_config.NumberColumn(format="%.0f"),
-                "NFA (sqm)": st.column_config.NumberColumn(format="%.0f"),
-                "GDV": st.column_config.NumberColumn(format="CHF %.0f"),
-                "Development cost": st.column_config.NumberColumn(format="CHF %.0f"),
-                "Maximum land price": st.column_config.NumberColumn(format="CHF %.0f"),
-                "NPV at asking": st.column_config.NumberColumn(format="CHF %.0f"),
-            },
-        )
-
-        price_chart_frame = pd.DataFrame(
-            {
-                "Case": [
-                    analysis.plan.name for analysis in comparison.analyses
-                ]
-                + ["Seller asking price"],
-                "CHF": [
-                    analysis.maximum_supportable_land_price
-                    for analysis in comparison.analyses
-                ]
-                + [dev_asking_land_price],
-            }
-        )
-        price_figure = px.bar(
-            price_chart_frame,
-            x="Case",
-            y="CHF",
-            color="Case",
-            title="Maximum supportable land price by plan",
-        )
-        price_figure.update_layout(showlegend=False)
-        st.plotly_chart(price_figure, use_container_width=True)
-
-        for analysis in comparison.analyses:
-            with st.expander(f"{analysis.plan.name} · Detailed calculation"):
-                value_col, cost_col = st.columns(2)
-                with value_col:
-                    st.markdown("**Completion value**")
-                    st.write(
-                        f"Residential income value: "
-                        f"{chf(analysis.residential_income_value)}"
-                    )
-                    st.write(
-                        f"Commercial income value: "
-                        f"{chf(analysis.commercial_income_value)}"
-                    )
-                    st.write(f"Condo sales: {chf(analysis.condo_sales_value)}")
-                    st.write(f"Parking sales: {chf(analysis.parking_sales_value)}")
-                    st.write(f"Gross development value: **{chf(analysis.gross_development_value)}**")
-                with cost_col:
-                    st.markdown("**Residual calculation**")
-                    st.write(
-                        f"PV of completion proceeds: "
-                        f"{chf(analysis.present_value_of_completion_proceeds)}"
-                    )
-                    st.write(
-                        f"PV of development costs: "
-                        f"{chf(analysis.present_value_of_development_cost)}"
-                    )
-                    st.write(
-                        f"Residual before land costs: "
-                        f"{chf(analysis.residual_land_value_before_acquisition_costs)}"
-                    )
-                    st.write(
-                        f"Maximum supportable land price: "
-                        f"**{chf(analysis.maximum_supportable_land_price)}**"
-                    )
-                annual_cost_frame = pd.DataFrame(
-                    [
-                        {
-                            "Year": year.year,
-                            "Construction": year.construction_cost,
-                            "Professional fees": year.professional_fees,
-                            "Contingency": year.contingency,
-                            "Total cost": year.total_development_cost,
-                            "PV of cost": year.present_value_of_cost,
-                        }
-                        for year in analysis.development_years
-                    ]
-                )
-                st.dataframe(
-                    annual_cost_frame,
-                    use_container_width=True,
-                    hide_index=True,
-                    column_config={
-                        column: st.column_config.NumberColumn(format="CHF %.0f")
-                        for column in (
-                            "Construction",
-                            "Professional fees",
-                            "Contingency",
-                            "Total cost",
-                            "PV of cost",
-                        )
-                    },
-                )
-
-        st.markdown("#### 4 · Sensitivity of the preferred plan")
-        preferred_analysis = next(
-            analysis
-            for analysis in comparison.analyses
-            if analysis.plan.name == comparison.preferred_plan_name
-        )
-        sensitivity_points = development_sensitivity_grid(
-            development_project,
-            preferred_analysis.plan,
-        )
-        sensitivity_frame = pd.DataFrame(
-            [
-                {
-                    "Construction cost change": f"{point.construction_cost_change:+.0%}",
-                    "Revenue change": f"{point.revenue_change:+.0%}",
-                    "Maximum land price": point.maximum_supportable_land_price,
-                }
-                for point in sensitivity_points
-            ]
-        )
-        sensitivity_matrix = sensitivity_frame.pivot(
-            index="Construction cost change",
-            columns="Revenue change",
-            values="Maximum land price",
-        )
-        ordered_labels = ["-10%", "-5%", "+0%", "+5%", "+10%"]
-        sensitivity_matrix = sensitivity_matrix.reindex(
-            index=ordered_labels,
-            columns=ordered_labels,
-        )
-        sensitivity_figure = px.imshow(
-            sensitivity_matrix,
-            text_auto=",.0f",
-            aspect="auto",
-            color_continuous_scale="RdYlGn",
-            labels={
-                "x": "Revenue change",
-                "y": "Construction-cost change",
-                "color": "Max land price (CHF)",
-            },
-            title=(
-                f"{comparison.preferred_plan_name}: maximum supportable land price"
-            ),
-        )
-        st.plotly_chart(sensitivity_figure, use_container_width=True)
-        st.info(
-            "The maximum supportable land price is the purchase price that makes "
-            "NPV equal to zero at the selected target discount rate. Plan "
-            "probabilities represent alternative planning/outcome assumptions; "
-            "the highest-value plan is shown separately from the probability-weighted result."
-        )
