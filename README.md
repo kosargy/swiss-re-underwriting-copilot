@@ -11,8 +11,7 @@ The interface is organized by investment strategy:
 - **Value-Add / Repositioning** for renovation, lease-up and operational change
 - **Ground-Up Development** for land acquisition and new construction
 
-Only the workflow relevant to the selected strategy is displayed. The
-Value-Add engine is identified in the interface as the next model to be built.
+Only the workflow relevant to the selected strategy is displayed.
 
 ## What the engine calculates
 
@@ -43,6 +42,12 @@ Value-Add engine is identified in the interface as the next model to be built.
 - Maximum supportable land price at the selected target return
 - Development-cost schedule, NPV, IRR and profit margin
 - Construction-cost/revenue sensitivity matrix
+- Value-Add transition-period and stabilized annual cash flows
+- Renovation income disruption and equity-funded CapEx
+- As-is value, stabilized value and value-creation bridge
+- Maximum supportable acquisition price and break-even renovation budget
+- Value-Add unlevered/levered IRR, equity multiple and stabilized DSCR
+- Renovation-cost/stabilized-rent sensitivity matrix
 
 Core calculations are separated from the user interface so an interviewer can
 audit the methodology instead of treating the outputs as a black box.
@@ -69,6 +74,21 @@ Plan probabilities must total 100%. They produce a probability-weighted land
 value, while the app separately identifies the plan with the highest residual
 value. All results are preliminary decision-support outputs, not a certified
 valuation.
+
+## Value-Add / Repositioning module
+
+The Value-Add workflow models an existing property's current operations, a
+multi-year renovation period and the stabilized post-renovation case. It tracks
+income disruption, operating costs, annual renovation CapEx, purchase debt,
+amortization and exit proceeds. The module calculates the as-is and stabilized
+values, value created after CapEx, NPV, unlevered and levered IRR, equity
+multiple and stabilized DSCR.
+
+The maximum supportable purchase price is the price that makes NPV equal to
+zero at the target discount rate. The break-even renovation budget is the total
+CapEx that produces the same zero-NPV result at the entered asking price. The
+first version assumes renovation CapEx is equity-funded; this is stated in the
+interface so the financing convention remains auditable.
 
 ## Included case
 

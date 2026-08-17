@@ -28,6 +28,12 @@ from underwriting import (
     sensitivity_grid,
     standard_scenarios,
 )
+from value_add import (
+    ValueAddFinancing,
+    ValueAddProject,
+    analyse_value_add,
+    value_add_sensitivity_grid,
+)
 
 
 st.set_page_config(
@@ -56,6 +62,421 @@ def chf(value: float) -> str:
 
 def percentage(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2%}"
+
+
+def render_value_add_workflow() -> None:
+    st.divider()
+    st.subheader("Value-Add / Repositioning")
+    st.caption(
+        "Underwrite an existing property through renovation, income disruption, "
+        "stabilization and exit."
+    )
+    st.warning(
+        "Preliminary decision-support model. Purchase debt is modelled separately; "
+        "renovation CapEx is assumed to be funded with equity in this version."
+    )
+
+    current_tab, plan_tab, finance_tab = st.tabs(
+        [
+            "1 · Property today",
+            "2 · Business plan",
+            "3 · Financing & targets",
+        ]
+    )
+    with current_tab:
+        current_1, current_2, current_3 = st.columns(3)
+        with current_1:
+            va_name = st.text_input(
+                "Project name",
+                "Zürich Residential Repositioning",
+                key="va_name",
+            )
+            va_location = st.text_input(
+                "Location",
+                "Zürich, Switzerland",
+                key="va_location",
+            )
+            va_purchase_price = st.number_input(
+                "Asking price (CHF)",
+                min_value=100_000.0,
+                value=12_000_000.0,
+                step=100_000.0,
+                key="va_purchase_price",
+            )
+        with current_2:
+            va_current_rent = st.number_input(
+                "Current potential annual rent (CHF)",
+                min_value=0.0,
+                value=720_000.0,
+                step=10_000.0,
+                key="va_current_rent",
+            )
+            va_current_vacancy_pct = st.number_input(
+                "Current vacancy (%)",
+                min_value=0.0,
+                max_value=99.0,
+                value=8.0,
+                step=0.5,
+                key="va_current_vacancy_pct",
+            )
+            va_current_opex = st.number_input(
+                "Current operating expenses (CHF)",
+                min_value=0.0,
+                value=210_000.0,
+                step=10_000.0,
+                key="va_current_opex",
+            )
+        with current_3:
+            va_current_cap_pct = st.number_input(
+                "Current market cap rate (%)",
+                min_value=0.1,
+                max_value=30.0,
+                value=4.25,
+                step=0.05,
+                key="va_current_cap_pct",
+            )
+            va_acquisition_cost_pct = st.number_input(
+                "Acquisition costs (%)",
+                min_value=0.0,
+                max_value=20.0,
+                value=2.0,
+                step=0.25,
+                key="va_acquisition_cost_pct",
+            )
+
+    with plan_tab:
+        plan_1, plan_2, plan_3 = st.columns(3)
+        with plan_1:
+            va_renovation_years = st.number_input(
+                "Renovation period (years)",
+                min_value=1,
+                max_value=5,
+                value=2,
+                step=1,
+                key="va_renovation_years",
+            )
+            va_total_capex = st.number_input(
+                "Total renovation CapEx (CHF)",
+                min_value=0.0,
+                value=2_200_000.0,
+                step=100_000.0,
+                key="va_total_capex",
+            )
+            va_income_retention_pct = st.number_input(
+                "Rental income retained during works (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=70.0,
+                step=5.0,
+                key="va_income_retention_pct",
+                help=(
+                    "Share of occupied rental income that remains collectible while "
+                    "the renovation is in progress."
+                ),
+            )
+        with plan_2:
+            va_stabilized_rent = st.number_input(
+                "Stabilized potential annual rent (CHF)",
+                min_value=0.0,
+                value=980_000.0,
+                step=10_000.0,
+                key="va_stabilized_rent",
+            )
+            va_stabilized_vacancy_pct = st.number_input(
+                "Stabilized vacancy (%)",
+                min_value=0.0,
+                max_value=99.0,
+                value=3.0,
+                step=0.5,
+                key="va_stabilized_vacancy_pct",
+            )
+            va_stabilized_opex = st.number_input(
+                "Stabilized operating expenses (CHF)",
+                min_value=0.0,
+                value=245_000.0,
+                step=10_000.0,
+                key="va_stabilized_opex",
+            )
+        with plan_3:
+            va_rent_growth_pct = st.number_input(
+                "Annual rent growth (%)",
+                min_value=0.0,
+                max_value=20.0,
+                value=1.5,
+                step=0.1,
+                key="va_rent_growth_pct",
+            )
+            va_expense_growth_pct = st.number_input(
+                "Annual expense growth (%)",
+                min_value=0.0,
+                max_value=20.0,
+                value=2.0,
+                step=0.1,
+                key="va_expense_growth_pct",
+            )
+            va_holding_period = st.number_input(
+                "Holding period (years)",
+                min_value=int(va_renovation_years) + 1,
+                max_value=15,
+                value=max(5, int(va_renovation_years) + 1),
+                step=1,
+                key="va_holding_period",
+            )
+
+    with finance_tab:
+        finance_1, finance_2, finance_3 = st.columns(3)
+        with finance_1:
+            va_ltv_pct = st.number_input(
+                "Purchase loan-to-value (%)",
+                min_value=0.0,
+                max_value=99.0,
+                value=60.0,
+                step=1.0,
+                key="va_ltv_pct",
+            )
+            va_interest_pct = st.number_input(
+                "Interest rate (%)",
+                min_value=0.0,
+                max_value=30.0,
+                value=3.5,
+                step=0.1,
+                key="va_interest_pct",
+            )
+            va_amortization_pct = st.number_input(
+                "Annual amortization (%)",
+                min_value=0.0,
+                max_value=20.0,
+                value=1.0,
+                step=0.25,
+                key="va_amortization_pct",
+            )
+        with finance_2:
+            va_discount_pct = st.number_input(
+                "Discount rate (%)",
+                min_value=0.1,
+                max_value=30.0,
+                value=7.0,
+                step=0.25,
+                key="va_discount_pct",
+            )
+            va_exit_cap_pct = st.number_input(
+                "Exit cap rate (%)",
+                min_value=0.1,
+                max_value=30.0,
+                value=4.0,
+                step=0.05,
+                key="va_exit_cap_pct",
+            )
+            va_selling_cost_pct = st.number_input(
+                "Selling costs (%)",
+                min_value=0.0,
+                max_value=20.0,
+                value=1.0,
+                step=0.25,
+                key="va_selling_cost_pct",
+            )
+        with finance_3:
+            va_target_unlevered_pct = st.number_input(
+                "Target unlevered IRR (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=7.0,
+                step=0.25,
+                key="va_target_unlevered_pct",
+            )
+            va_target_levered_pct = st.number_input(
+                "Target levered IRR (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=10.0,
+                step=0.25,
+                key="va_target_levered_pct",
+            )
+
+    renovation_years = int(va_renovation_years)
+    capex_schedule = tuple(
+        va_total_capex / renovation_years for _ in range(renovation_years)
+    )
+    value_add_project = ValueAddProject(
+        name=va_name,
+        location=va_location,
+        purchase_price=va_purchase_price,
+        acquisition_cost_rate=va_acquisition_cost_pct / 100,
+        current_potential_rent=va_current_rent,
+        current_vacancy_rate=va_current_vacancy_pct / 100,
+        current_operating_expenses=va_current_opex,
+        current_market_cap_rate=va_current_cap_pct / 100,
+        renovation_years=renovation_years,
+        renovation_capex_by_year=capex_schedule,
+        income_retention_during_renovation=va_income_retention_pct / 100,
+        stabilized_potential_rent=va_stabilized_rent,
+        stabilized_vacancy_rate=va_stabilized_vacancy_pct / 100,
+        stabilized_operating_expenses=va_stabilized_opex,
+        annual_rent_growth_rate=va_rent_growth_pct / 100,
+        annual_expense_growth_rate=va_expense_growth_pct / 100,
+        exit_cap_rate=va_exit_cap_pct / 100,
+        discount_rate=va_discount_pct / 100,
+        selling_cost_rate=va_selling_cost_pct / 100,
+        holding_period_years=int(va_holding_period),
+        target_unlevered_irr=va_target_unlevered_pct / 100,
+        target_levered_irr=va_target_levered_pct / 100,
+    )
+    value_add_financing = ValueAddFinancing(
+        purchase_loan_to_value=va_ltv_pct / 100,
+        interest_rate=va_interest_pct / 100,
+        annual_amortization_rate=va_amortization_pct / 100,
+    )
+    result = analyse_value_add(value_add_project, value_add_financing)
+
+    st.divider()
+    st.markdown("#### 4 · Investment decision")
+    decision_1, decision_2, decision_3, decision_4 = st.columns(4)
+    decision_1.metric("As-is value", chf(result.as_is_value))
+    decision_2.metric("Stabilized value", chf(result.stabilized_value))
+    decision_3.metric(
+        "Maximum purchase price",
+        chf(result.maximum_supportable_purchase_price),
+    )
+    decision_4.metric("NPV at asking", chf(result.project_npv_at_asking_price))
+
+    return_1, return_2, return_3, return_4 = st.columns(4)
+    return_1.metric("Unlevered IRR", percentage(result.unlevered_irr))
+    return_2.metric("Levered IRR", percentage(result.levered_irr))
+    return_3.metric("Equity multiple", f"{result.equity_multiple:.2f}x")
+    return_4.metric(
+        "Minimum stabilized DSCR",
+        (
+            "n/a"
+            if result.minimum_stabilized_dscr is None
+            else f"{result.minimum_stabilized_dscr:.2f}x"
+        ),
+    )
+
+    if result.recommendation.startswith("ATTRACTIVE"):
+        st.success(result.recommendation)
+    elif result.recommendation.startswith("FEASIBLE"):
+        st.success(result.recommendation)
+    elif result.recommendation.startswith("NEGOTIATE"):
+        st.warning(result.recommendation)
+    else:
+        st.error(result.recommendation)
+
+    if result.project_npv_at_asking_price >= 0:
+        st.info(
+            f"The current asking price is supportable under the base case. "
+            f"The model indicates a maximum purchase price of approximately "
+            f"{chf(result.maximum_supportable_purchase_price)}."
+        )
+    else:
+        st.info(
+            f"The current asking price is not supportable under the base case. "
+            f"A price at or below approximately "
+            f"{chf(result.maximum_supportable_purchase_price)} is required."
+        )
+
+    st.markdown("#### Value-creation bridge")
+    bridge_1, bridge_2, bridge_3, bridge_4 = st.columns(4)
+    bridge_1.metric("Current NOI", chf(result.current_noi))
+    bridge_2.metric("Stabilized NOI", chf(result.stabilized_noi))
+    bridge_3.metric("Gross value uplift", chf(result.gross_value_uplift))
+    bridge_4.metric(
+        "Value created after CapEx",
+        chf(result.incremental_value_created),
+    )
+    limit_1, limit_2 = st.columns(2)
+    limit_1.metric(
+        "Break-even renovation budget",
+        (
+            "n/a"
+            if result.break_even_total_renovation_capex is None
+            else chf(result.break_even_total_renovation_capex)
+        ),
+        help="Total CapEx that would reduce project NPV to zero at the asking price.",
+    )
+    limit_2.metric("Renovation ROI", percentage(result.renovation_roi))
+
+    projection_frame = pd.DataFrame(
+        [
+            {
+                "Year": item.year,
+                "Phase": item.phase,
+                "Potential rent": item.potential_rent,
+                "Income disruption": item.renovation_income_loss,
+                "NOI": item.noi,
+                "Renovation CapEx": item.renovation_capex,
+                "Debt service": item.debt_service,
+                "Equity cash flow before sale": item.equity_cash_flow_before_sale,
+                "DSCR": item.dscr,
+            }
+            for item in result.projections
+        ]
+    )
+    st.markdown("#### Annual business-plan cash flows")
+    st.dataframe(
+        projection_frame,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            column: st.column_config.NumberColumn(format="CHF %.0f")
+            for column in (
+                "Potential rent",
+                "Income disruption",
+                "NOI",
+                "Renovation CapEx",
+                "Debt service",
+                "Equity cash flow before sale",
+            )
+        }
+        | {"DSCR": st.column_config.NumberColumn(format="%.2fx")},
+    )
+
+    cash_flow_chart = px.bar(
+        projection_frame,
+        x="Year",
+        y=["NOI", "Renovation CapEx"],
+        barmode="group",
+        title="NOI and renovation investment by year",
+    )
+    st.plotly_chart(cash_flow_chart, use_container_width=True)
+
+    st.markdown("#### Sensitivity: maximum supportable purchase price")
+    sensitivity_points = value_add_sensitivity_grid(
+        value_add_project,
+        value_add_financing,
+    )
+    sensitivity_frame = pd.DataFrame(
+        [
+            {
+                "Renovation cost change": f"{point.renovation_cost_change:+.0%}",
+                "Stabilized rent change": f"{point.stabilized_rent_change:+.0%}",
+                "Maximum purchase price": point.maximum_supportable_purchase_price,
+            }
+            for point in sensitivity_points
+        ]
+    )
+    sensitivity_matrix = sensitivity_frame.pivot(
+        index="Renovation cost change",
+        columns="Stabilized rent change",
+        values="Maximum purchase price",
+    )
+    labels = ["-10%", "-5%", "+0%", "+5%", "+10%"]
+    sensitivity_matrix = sensitivity_matrix.reindex(index=labels, columns=labels)
+    sensitivity_figure = px.imshow(
+        sensitivity_matrix,
+        text_auto=",.0f",
+        aspect="auto",
+        color_continuous_scale="RdYlGn",
+        labels={
+            "x": "Stabilized rent change",
+            "y": "Renovation-cost change",
+            "color": "Max purchase price (CHF)",
+        },
+    )
+    st.plotly_chart(sensitivity_figure, use_container_width=True)
+    st.caption(
+        "The maximum purchase price is the price that makes NPV equal to zero "
+        "at the selected discount rate. It is not a certified valuation."
+    )
 
 
 def render_development_workflow() -> None:
@@ -639,7 +1060,7 @@ def render_development_workflow() -> None:
 st.title("Swiss Real Estate Underwriting Copilot")
 st.caption(
     "Decision support for core acquisitions, value-add strategies and "
-    "ground-up developments · Portfolio MVP v0.6"
+    "ground-up developments · Portfolio MVP v0.7"
 )
 if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")
@@ -674,26 +1095,7 @@ if investment_strategy == "Ground-Up Development":
     st.stop()
 
 if investment_strategy == "Value-Add / Repositioning":
-    st.divider()
-    st.subheader("Value-Add / Repositioning")
-    st.caption(
-        "Underwrite an existing building that requires renovation, lease-up "
-        "or a change in operating strategy."
-    )
-    value_add_1, value_add_2, value_add_3 = st.columns(3)
-    value_add_1.markdown(
-        "**1 · Current property**\n\nIn-place NOI, occupancy, leases and debt."
-    )
-    value_add_2.markdown(
-        "**2 · Business plan**\n\nRenovation CapEx, downtime and rent uplift."
-    )
-    value_add_3.markdown(
-        "**3 · Stabilized outcome**\n\nPost-renovation value, IRR and value creation."
-    )
-    st.info(
-        "This workflow is the next calculation engine to be built. "
-        "It is shown separately now so the product architecture is clear."
-    )
+    render_value_add_workflow()
     st.stop()
 
 with st.sidebar:
