@@ -1810,7 +1810,7 @@ def render_development_workflow() -> None:
 st.title("Swiss Real Estate Underwriting Copilot")
 st.caption(
     "Decision support for core acquisitions, value-add strategies and "
-    "ground-up developments · Portfolio MVP v1.0"
+    "ground-up developments · Portfolio MVP v1.1"
 )
 if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")
