@@ -13,6 +13,13 @@ The interface is organized by investment strategy:
 
 Only the workflow relevant to the selected strategy is displayed.
 
+An additional **3-minute interview demo** loads a curated Value-Add case and
+guides the presenter from opportunity to business plan, base-case decision and
+downside challenge. Interactive controls stress renovation CapEx, stabilized
+rent and exit cap rate. The application immediately reprices the maximum bid,
+updates returns and produces a stressed Investment Committee memo. A built-in
+talk track keeps the demonstration concise and repeatable.
+
 ## What the engine calculates
 
 - Effective rental income and vacancy loss
@@ -51,6 +58,8 @@ Only the workflow relevant to the selected strategy is displayed.
 - Strategy-specific Investment Committee memos for Core, Value-Add and Development
 - Executive decision narrative, principal risks and required due diligence
 - Downloadable maximum-bid recommendation for every investment strategy
+- Guided interview demo with a preloaded Value-Add investment case
+- Live downside challenge and base-versus-stressed decision comparison
 
 Core calculations are separated from the user interface so an interviewer can
 audit the methodology instead of treating the outputs as a black box.

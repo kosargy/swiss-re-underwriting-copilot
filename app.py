@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -63,6 +64,227 @@ def chf(value: float) -> str:
 
 def percentage(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2%}"
+
+
+def render_interview_demo() -> None:
+    st.divider()
+    st.subheader("3-minute Investment Committee demo")
+    st.caption(
+        "A guided Value-Add case designed to demonstrate how assumptions become "
+        "an investment decision."
+    )
+
+    base_project = ValueAddProject(
+        name="Zürich Residential Repositioning",
+        location="Zürich, Switzerland",
+        purchase_price=12_000_000,
+        acquisition_cost_rate=0.02,
+        current_potential_rent=720_000,
+        current_vacancy_rate=0.08,
+        current_operating_expenses=210_000,
+        current_market_cap_rate=0.0425,
+        renovation_years=2,
+        renovation_capex_by_year=(1_200_000, 1_000_000),
+        income_retention_during_renovation=0.70,
+        stabilized_potential_rent=980_000,
+        stabilized_vacancy_rate=0.03,
+        stabilized_operating_expenses=245_000,
+        annual_rent_growth_rate=0.015,
+        annual_expense_growth_rate=0.02,
+        exit_cap_rate=0.04,
+        discount_rate=0.07,
+        selling_cost_rate=0.01,
+        holding_period_years=5,
+        target_unlevered_irr=0.07,
+        target_levered_irr=0.10,
+    )
+    financing = ValueAddFinancing(
+        purchase_loan_to_value=0.60,
+        interest_rate=0.035,
+        annual_amortization_rate=0.01,
+    )
+    base = analyse_value_add(base_project, financing)
+
+    st.markdown("#### 1 · The opportunity")
+    opportunity_1, opportunity_2, opportunity_3, opportunity_4 = st.columns(4)
+    opportunity_1.metric("Asking price", chf(base_project.purchase_price))
+    opportunity_2.metric("Current vacancy", percentage(base_project.current_vacancy_rate))
+    opportunity_3.metric("Current NOI", chf(base.current_noi))
+    opportunity_4.metric("As-is value", chf(base.as_is_value))
+    st.write(
+        "An older residential asset is offered above its income-capitalized as-is "
+        "value. The investment thesis depends on renovation, lease-up and a "
+        "material improvement in rental income."
+    )
+
+    st.markdown("#### 2 · The business plan")
+    plan_1, plan_2, plan_3, plan_4 = st.columns(4)
+    plan_1.metric("Renovation CapEx", chf(base_project.total_renovation_capex))
+    plan_2.metric("Renovation period", "2 years")
+    plan_3.metric("Stabilized NOI", chf(base.stabilized_noi))
+    plan_4.metric("Stabilized value", chf(base.stabilized_value))
+
+    st.markdown("#### 3 · Base-case decision")
+    base_1, base_2, base_3, base_4 = st.columns(4)
+    base_1.metric("Maximum bid", chf(base.maximum_supportable_purchase_price))
+    base_2.metric("Levered IRR", percentage(base.levered_irr))
+    base_3.metric("Value after CapEx", chf(base.incremental_value_created))
+    base_4.metric("Equity multiple", f"{base.equity_multiple:.2f}x")
+    st.success(base.recommendation)
+
+    st.markdown("#### 4 · Challenge the investment thesis")
+    st.caption(
+        "Move the downside assumptions and watch the decision and maximum bid change."
+    )
+    stress_1, stress_2, stress_3 = st.columns(3)
+    with stress_1:
+        demo_capex_overrun_pct = st.slider(
+            "Renovation CapEx overrun (%)",
+            min_value=0,
+            max_value=40,
+            value=15,
+            step=5,
+            key="demo_capex_overrun_pct",
+        )
+    with stress_2:
+        demo_rent_downside_pct = st.slider(
+            "Stabilized rent downside (%)",
+            min_value=0,
+            max_value=20,
+            value=10,
+            step=2,
+            key="demo_rent_downside_pct",
+        )
+    with stress_3:
+        demo_exit_cap_expansion_bps = st.slider(
+            "Exit cap expansion (bps)",
+            min_value=0,
+            max_value=150,
+            value=50,
+            step=25,
+            key="demo_exit_cap_expansion_bps",
+        )
+
+    stressed_project = replace(
+        base_project,
+        renovation_capex_by_year=tuple(
+            amount * (1.0 + demo_capex_overrun_pct / 100)
+            for amount in base_project.renovation_capex_by_year
+        ),
+        stabilized_potential_rent=(
+            base_project.stabilized_potential_rent
+            * (1.0 - demo_rent_downside_pct / 100)
+        ),
+        exit_cap_rate=(
+            base_project.exit_cap_rate
+            + demo_exit_cap_expansion_bps / 10_000
+        ),
+    )
+    stressed = analyse_value_add(stressed_project, financing)
+
+    comparison_frame = pd.DataFrame(
+        [
+            {
+                "Case": "Base case",
+                "Renovation CapEx": base_project.total_renovation_capex,
+                "Stabilized rent": base_project.stabilized_potential_rent,
+                "Exit cap rate": percentage(base_project.exit_cap_rate),
+                "Maximum bid": base.maximum_supportable_purchase_price,
+                "Levered IRR": percentage(base.levered_irr),
+                "NPV": base.project_npv_at_asking_price,
+                "Decision": base.recommendation,
+            },
+            {
+                "Case": "Stressed case",
+                "Renovation CapEx": stressed_project.total_renovation_capex,
+                "Stabilized rent": stressed_project.stabilized_potential_rent,
+                "Exit cap rate": percentage(stressed_project.exit_cap_rate),
+                "Maximum bid": stressed.maximum_supportable_purchase_price,
+                "Levered IRR": percentage(stressed.levered_irr),
+                "NPV": stressed.project_npv_at_asking_price,
+                "Decision": stressed.recommendation,
+            },
+        ]
+    )
+    st.dataframe(
+        comparison_frame,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Renovation CapEx": st.column_config.NumberColumn(format="CHF %.0f"),
+            "Stabilized rent": st.column_config.NumberColumn(format="CHF %.0f"),
+            "Maximum bid": st.column_config.NumberColumn(format="CHF %.0f"),
+            "NPV": st.column_config.NumberColumn(format="CHF %.0f"),
+        },
+    )
+    impact_1, impact_2, impact_3 = st.columns(3)
+    impact_1.metric(
+        "Stressed maximum bid",
+        chf(stressed.maximum_supportable_purchase_price),
+        chf(
+            stressed.maximum_supportable_purchase_price
+            - base.maximum_supportable_purchase_price
+        ),
+    )
+    impact_2.metric(
+        "Stressed levered IRR",
+        percentage(stressed.levered_irr),
+        (
+            "n/a"
+            if stressed.levered_irr is None or base.levered_irr is None
+            else f"{(stressed.levered_irr - base.levered_irr) * 100:+.2f} pp"
+        ),
+    )
+    impact_3.metric("Stressed NPV", chf(stressed.project_npv_at_asking_price))
+
+    if stressed.recommendation.startswith(("ATTRACTIVE", "FEASIBLE")):
+        st.success(stressed.recommendation)
+    elif stressed.recommendation.startswith("NEGOTIATE"):
+        st.warning(stressed.recommendation)
+    else:
+        st.error(stressed.recommendation)
+
+    maximum_bid_change = (
+        stressed.maximum_supportable_purchase_price
+        - base.maximum_supportable_purchase_price
+    )
+    st.info(
+        f"Investment Committee insight: the selected downside assumptions reduce "
+        f"the supportable purchase price by {chf(abs(maximum_bid_change))}. "
+        f"The stressed maximum bid is "
+        f"{chf(stressed.maximum_supportable_purchase_price)} versus the seller's "
+        f"{chf(base_project.purchase_price)} asking price."
+    )
+
+    stressed_memo = build_value_add_memo(stressed)
+    st.download_button(
+        "Generate stressed Investment Committee memo (PDF)",
+        data=stressed_memo,
+        file_name="interview_demo_stressed_ic_memo.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+        key="download_demo_stressed_memo",
+    )
+
+    with st.expander("Suggested 3-minute interview script"):
+        st.markdown(
+            """
+**Opening:** “I built a decision-support platform for three real-estate investment
+strategies. This case demonstrates a Value-Add acquisition.”
+
+**Opportunity:** “The asking price is above the property's as-is income value, so
+the deal only works if the renovation business plan creates sufficient NOI.”
+
+**Base case:** “The platform models income disruption, CapEx, debt service,
+stabilization and exit, then calculates the maximum supportable bid.”
+
+**Challenge:** “I can stress renovation cost, achievable rent and the exit cap
+rate. The platform immediately reprices the deal and changes the recommendation.”
+
+**Close:** “It then converts the underwriting into an auditable Investment
+Committee memo with the decision, risks and required due diligence.”
+"""
+        )
 
 
 def render_value_add_workflow() -> None:
@@ -1083,11 +1305,21 @@ def render_development_workflow() -> None:
 st.title("Swiss Real Estate Underwriting Copilot")
 st.caption(
     "Decision support for core acquisitions, value-add strategies and "
-    "ground-up developments · Portfolio MVP v0.8"
+    "ground-up developments · Portfolio MVP v0.9"
 )
 if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")
 
+experience_mode = st.segmented_control(
+    "Experience",
+    options=["Full underwriting", "3-minute interview demo"],
+    default="Full underwriting",
+    selection_mode="single",
+    key="experience_mode",
+)
+if experience_mode == "3-minute interview demo":
+    render_interview_demo()
+    st.stop()
 
 st.markdown("### Choose your investment strategy")
 strategy_options = {
