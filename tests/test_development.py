@@ -81,6 +81,46 @@ class DevelopmentEngineTests(unittest.TestCase):
             without_cost.maximum_supportable_land_price / 1.05,
         )
 
+    def test_predevelopment_income_is_discounted_and_added_to_land_value(self):
+        no_income = analyse_development_plan(
+            sample_project(predevelopment_income_years=1),
+            sample_plan(),
+        )
+        with_income = analyse_development_plan(
+            sample_project(
+                predevelopment_income_years=1,
+                predevelopment_potential_income=120_000,
+                predevelopment_operating_expenses=20_000,
+            ),
+            sample_plan(),
+        )
+        self.assertAlmostEqual(
+            with_income.present_value_of_predevelopment_income,
+            100_000 / 1.10,
+        )
+        self.assertAlmostEqual(
+            with_income.maximum_supportable_land_price
+            - no_income.maximum_supportable_land_price,
+            100_000 / 1.10,
+        )
+
+    def test_predevelopment_period_delays_build_and_includes_termination_cost(self):
+        result = analyse_development_plan(
+            sample_project(
+                predevelopment_income_years=2,
+                predevelopment_potential_income=100_000,
+                predevelopment_vacancy_rate=0.10,
+                predevelopment_operating_expenses=20_000,
+                predevelopment_income_growth_rate=0.05,
+                predevelopment_termination_cost=30_000,
+            ),
+            sample_plan(),
+        )
+        self.assertEqual(len(result.cash_flows_at_asking_price), 4)
+        self.assertEqual(result.development_years[0].year, 3)
+        self.assertAlmostEqual(result.predevelopment_years[0].net_cash_flow, 70_000)
+        self.assertAlmostEqual(result.predevelopment_years[1].net_cash_flow, 44_500)
+
     def test_use_mix_must_total_one_hundred_percent(self):
         with self.assertRaises(ValueError):
             sample_plan(

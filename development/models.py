@@ -29,12 +29,21 @@ class DevelopmentProject:
     contingency_rate: float
     selling_cost_rate: float
     land_acquisition_cost_rate: float
+    predevelopment_potential_income: float = 0.0
+    predevelopment_vacancy_rate: float = 0.0
+    predevelopment_operating_expenses: float = 0.0
+    predevelopment_income_growth_rate: float = 0.0
+    predevelopment_income_years: int = 0
+    predevelopment_termination_cost: float = 0.0
 
     def __post_init__(self) -> None:
         for field_name in (
             "asking_land_price",
             "plot_size_sqm",
             "density_ratio",
+            "predevelopment_potential_income",
+            "predevelopment_operating_expenses",
+            "predevelopment_termination_cost",
         ):
             _non_negative(field_name, getattr(self, field_name))
         if self.plot_size_sqm == 0 or self.density_ratio == 0:
@@ -48,8 +57,12 @@ class DevelopmentProject:
             "contingency_rate",
             "selling_cost_rate",
             "land_acquisition_cost_rate",
+            "predevelopment_vacancy_rate",
+            "predevelopment_income_growth_rate",
         ):
             _rate(field_name, getattr(self, field_name))
+        if self.predevelopment_income_years < 0:
+            raise ValueError("predevelopment_income_years cannot be negative")
         if self.floor_space_efficiency == 0:
             raise ValueError("floor_space_efficiency must be above zero")
 
@@ -136,6 +149,18 @@ class DevelopmentYear:
 
 
 @dataclass(frozen=True)
+class PreDevelopmentYear:
+    year: int
+    potential_income: float
+    vacancy_loss: float
+    operating_expenses: float
+    termination_cost: float
+    net_cash_flow: float
+    discount_factor: float
+    present_value: float
+
+
+@dataclass(frozen=True)
 class DevelopmentAnalysis:
     project: DevelopmentProject
     plan: DevelopmentPlan
@@ -154,6 +179,8 @@ class DevelopmentAnalysis:
     gross_development_value: float
     selling_costs: float
     net_completion_proceeds: float
+    predevelopment_years: tuple[PreDevelopmentYear, ...]
+    present_value_of_predevelopment_income: float
     development_years: tuple[DevelopmentYear, ...]
     total_nominal_development_cost: float
     present_value_of_development_cost: float

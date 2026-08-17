@@ -82,6 +82,11 @@ that makes NPV equal to zero at the selected discount rate, including land
 acquisition costs. A 5x5 sensitivity matrix shows how this limit changes when
 construction costs and revenues move by plus or minus 5% and 10%.
 
+An optional pre-development holding period covers sites or existing buildings
+that continue producing income before construction. The model deducts vacancy,
+operating expenses and a final termination or demolition cost, discounts the net
+interim cash flows and shifts the construction and completion dates accordingly.
+
 Plan probabilities must total 100%. They produce a probability-weighted land
 value, while the app separately identifies the plan with the highest residual
 value. All results are preliminary decision-support outputs, not a certified

@@ -404,6 +404,17 @@ def build_development_memo(
         f"{_money(comparison.expected_maximum_land_price)}. "
         f"{comparison.preferred_plan_name} produces the highest residual value."
     )
+    preferred = next(
+        item
+        for item in comparison.analyses
+        if item.plan.name == comparison.preferred_plan_name
+    )
+    if project.predevelopment_income_years:
+        summary += (
+            f" The site is assumed to generate interim income for "
+            f"{project.predevelopment_income_years} year(s), contributing "
+            f"{_money(preferred.present_value_of_predevelopment_income)} in present value."
+        )
     assumptions = [
         ["Site", "Value", "Valuation", "Value"],
         ["Asking land price", _money(project.asking_land_price), "Discount rate", _percent(project.discount_rate)],
@@ -412,6 +423,14 @@ def build_development_memo(
         ["Net floor area", f"{project.net_floor_area_sqm:,.0f} sqm", "Contingency", _percent(project.contingency_rate)],
         ["Land acquisition cost", _percent(project.land_acquisition_cost_rate), "Selling costs", _percent(project.selling_cost_rate)],
     ]
+    if project.predevelopment_income_years:
+        assumptions.extend(
+            [
+                ["Pre-development period", f"{project.predevelopment_income_years} years", "Potential annual income", _money(project.predevelopment_potential_income)],
+                ["Interim vacancy", _percent(project.predevelopment_vacancy_rate), "Annual operating expenses", _money(project.predevelopment_operating_expenses)],
+                ["Interim income growth", _percent(project.predevelopment_income_growth_rate), "Termination / demolition", _money(project.predevelopment_termination_cost)],
+            ]
+        )
     analysis_rows = [["Plan", "Probability", "GDV", "Dev. cost", "Max land", "IRR"]]
     analysis_rows.extend(
         [
@@ -442,11 +461,6 @@ def build_development_memo(
         f"assumptions. Use {escape(comparison.preferred_plan_name)} as the leading "
         "concept, subject to planning, cost and market validation."
     )
-    preferred = next(
-        item
-        for item in comparison.analyses
-        if item.plan.name == comparison.preferred_plan_name
-    )
     return _build_document(
         title=f"Development IC Memo - {project.name}",
         subtitle=(
@@ -465,6 +479,7 @@ def build_development_memo(
             ("Preferred plan", comparison.preferred_plan_name),
             ("Preferred GDV", _money(preferred.gross_development_value)),
             ("Preferred IRR", _percent(preferred.project_irr_at_asking_price)),
+            ("PV interim income", _money(preferred.present_value_of_predevelopment_income)),
         ],
         executive_summary=summary,
         assumptions=assumptions,

@@ -82,6 +82,13 @@ DEVELOPMENT_PROJECT_WIDGET_KEYS = (
     "dev_professional_fees_pct",
     "dev_contingency_pct",
     "dev_selling_cost_pct",
+    "dev_has_predevelopment_income",
+    "dev_predevelopment_potential_income",
+    "dev_predevelopment_vacancy_pct",
+    "dev_predevelopment_opex",
+    "dev_predevelopment_growth_pct",
+    "dev_predevelopment_years",
+    "dev_predevelopment_termination_cost",
 )
 DEVELOPMENT_PLAN_FIELDS = (
     "probability",
@@ -1161,6 +1168,73 @@ def render_development_workflow() -> None:
             key="dev_selling_cost_pct",
         )
 
+    with st.expander("Optional · Income before development", expanded=False):
+        dev_has_predevelopment_income = st.checkbox(
+            "The site or existing building generates income before construction",
+            value=False,
+            key="dev_has_predevelopment_income",
+        )
+        st.caption(
+            "Use this when the site remains operational during a holding period. "
+            "The holding period delays construction; its net cash flows are discounted "
+            "and included in the residual land value."
+        )
+        if dev_has_predevelopment_income:
+            interim_1, interim_2, interim_3 = st.columns(3)
+            dev_predevelopment_potential_income = interim_1.number_input(
+                "Annual potential income (CHF)",
+                min_value=0.0,
+                value=250_000.0,
+                step=10_000.0,
+                key="dev_predevelopment_potential_income",
+            )
+            dev_predevelopment_vacancy_pct = interim_2.number_input(
+                "Vacancy / collection loss (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=5.0,
+                step=0.5,
+                key="dev_predevelopment_vacancy_pct",
+            )
+            dev_predevelopment_opex = interim_3.number_input(
+                "Annual operating expenses (CHF)",
+                min_value=0.0,
+                value=60_000.0,
+                step=5_000.0,
+                key="dev_predevelopment_opex",
+            )
+            interim_4, interim_5, interim_6 = st.columns(3)
+            dev_predevelopment_growth_pct = interim_4.number_input(
+                "Annual income growth (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=1.0,
+                step=0.25,
+                key="dev_predevelopment_growth_pct",
+            )
+            dev_predevelopment_years = interim_5.number_input(
+                "Years until construction starts",
+                min_value=1,
+                max_value=20,
+                value=2,
+                step=1,
+                key="dev_predevelopment_years",
+            )
+            dev_predevelopment_termination_cost = interim_6.number_input(
+                "Termination / demolition cost (CHF)",
+                min_value=0.0,
+                value=100_000.0,
+                step=10_000.0,
+                key="dev_predevelopment_termination_cost",
+            )
+        else:
+            dev_predevelopment_potential_income = 0.0
+            dev_predevelopment_vacancy_pct = 0.0
+            dev_predevelopment_opex = 0.0
+            dev_predevelopment_growth_pct = 0.0
+            dev_predevelopment_years = 0
+            dev_predevelopment_termination_cost = 0.0
+
     development_project = DevelopmentProject(
         name=dev_project_name,
         location=dev_location,
@@ -1175,6 +1249,12 @@ def render_development_workflow() -> None:
         contingency_rate=dev_contingency_pct / 100,
         selling_cost_rate=dev_selling_cost_pct / 100,
         land_acquisition_cost_rate=dev_land_acquisition_cost_pct / 100,
+        predevelopment_potential_income=dev_predevelopment_potential_income,
+        predevelopment_vacancy_rate=dev_predevelopment_vacancy_pct / 100,
+        predevelopment_operating_expenses=dev_predevelopment_opex,
+        predevelopment_income_growth_rate=dev_predevelopment_growth_pct / 100,
+        predevelopment_income_years=int(dev_predevelopment_years),
+        predevelopment_termination_cost=dev_predevelopment_termination_cost,
     )
     area_col_1, area_col_2 = st.columns(2)
     area_col_1.metric(
@@ -1460,6 +1540,13 @@ def render_development_workflow() -> None:
             thesis=(
                 f"{comparison.preferred_plan_name} produces the highest residual value, "
                 f"with a maximum land price of {chf(preferred_analysis.maximum_supportable_land_price)}."
+                + (
+                    f" Pre-development operations contribute "
+                    f"{chf(preferred_analysis.present_value_of_predevelopment_income)} "
+                    "in present value."
+                    if development_project.predevelopment_income_years
+                    else ""
+                )
             ),
             primary_risk=(
                 "Residual land value is highly sensitive to construction-cost overruns, "
@@ -1595,6 +1682,11 @@ def render_development_workflow() -> None:
                         f"PV of development costs: "
                         f"{chf(analysis.present_value_of_development_cost)}"
                     )
+                    if analysis.predevelopment_years:
+                        st.write(
+                            "PV of pre-development income: "
+                            f"{chf(analysis.present_value_of_predevelopment_income)}"
+                        )
                     st.write(
                         f"Residual before land costs: "
                         f"{chf(analysis.residual_land_value_before_acquisition_costs)}"
@@ -1603,6 +1695,33 @@ def render_development_workflow() -> None:
                         f"Maximum supportable land price: "
                         f"**{chf(analysis.maximum_supportable_land_price)}**"
                     )
+                if analysis.predevelopment_years:
+                    st.caption("Pre-development operating cash flows")
+                    predevelopment_frame = pd.DataFrame(
+                        [
+                            {
+                                "Year": year.year,
+                                "Potential income": year.potential_income,
+                                "Vacancy loss": year.vacancy_loss,
+                                "Operating expenses": year.operating_expenses,
+                                "Termination cost": year.termination_cost,
+                                "Net cash flow": year.net_cash_flow,
+                                "Present value": year.present_value,
+                            }
+                            for year in analysis.predevelopment_years
+                        ]
+                    )
+                    st.dataframe(
+                        predevelopment_frame,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            column: st.column_config.NumberColumn(format="CHF %.0f")
+                            for column in predevelopment_frame.columns
+                            if column != "Year"
+                        },
+                    )
+                st.caption("Development cost schedule")
                 annual_cost_frame = pd.DataFrame(
                     [
                         {

@@ -7,6 +7,7 @@ from .models import (
     DevelopmentPlan,
     DevelopmentProject,
     DevelopmentYear,
+    PreDevelopmentYear,
 )
 
 
@@ -18,7 +19,9 @@ def analyse_development_plan(
     residential_area = nfa * plan.residential_rental_share
     condo_area = nfa * plan.condo_sale_share
     commercial_area = nfa * plan.commercial_rental_share
-    revenue_growth_factor = (1.0 + project.revenue_growth_rate) ** plan.development_years
+    predevelopment_delay = project.predevelopment_income_years
+    completion_year = predevelopment_delay + plan.development_years
+    revenue_growth_factor = (1.0 + project.revenue_growth_rate) ** completion_year
 
     residential_rent = (
         residential_area * plan.residential_rent_per_sqm * revenue_growth_factor
@@ -63,11 +66,44 @@ def analyse_development_plan(
     )
     base_cost_per_year = base_construction_cost / plan.development_years
     development_years: list[DevelopmentYear] = []
+    predevelopment_years: list[PreDevelopmentYear] = []
     cash_flows = [
         -project.asking_land_price * (1.0 + project.land_acquisition_cost_rate)
     ]
 
-    for year in range(1, plan.development_years + 1):
+    for year in range(1, predevelopment_delay + 1):
+        potential_income = project.predevelopment_potential_income * (
+            (1.0 + project.predevelopment_income_growth_rate) ** (year - 1)
+        )
+        vacancy_loss = potential_income * project.predevelopment_vacancy_rate
+        termination_cost = (
+            project.predevelopment_termination_cost
+            if year == predevelopment_delay
+            else 0.0
+        )
+        net_cash_flow = (
+            potential_income
+            - vacancy_loss
+            - project.predevelopment_operating_expenses
+            - termination_cost
+        )
+        discount_factor = (1.0 + project.discount_rate) ** year
+        predevelopment_years.append(
+            PreDevelopmentYear(
+                year=year,
+                potential_income=potential_income,
+                vacancy_loss=vacancy_loss,
+                operating_expenses=project.predevelopment_operating_expenses,
+                termination_cost=termination_cost,
+                net_cash_flow=net_cash_flow,
+                discount_factor=discount_factor,
+                present_value=net_cash_flow / discount_factor,
+            )
+        )
+        cash_flows.append(net_cash_flow)
+
+    for development_year in range(1, plan.development_years + 1):
+        year = predevelopment_delay + development_year
         inflated_construction_cost = base_cost_per_year * (
             (1.0 + project.construction_cost_inflation) ** (year - 1)
         )
@@ -94,11 +130,14 @@ def analyse_development_plan(
     cash_flows[-1] += net_completion_proceeds
     total_nominal_cost = sum(item.total_development_cost for item in development_years)
     pv_cost = sum(item.present_value_of_cost for item in development_years)
-    completion_discount_factor = (
-        1.0 + project.discount_rate
-    ) ** plan.development_years
+    pv_predevelopment_income = sum(
+        item.present_value for item in predevelopment_years
+    )
+    completion_discount_factor = (1.0 + project.discount_rate) ** completion_year
     pv_proceeds = net_completion_proceeds / completion_discount_factor
-    residual_before_acquisition_costs = pv_proceeds - pv_cost
+    residual_before_acquisition_costs = (
+        pv_proceeds - pv_cost + pv_predevelopment_income
+    )
     maximum_land_price = residual_before_acquisition_costs / (
         1.0 + project.land_acquisition_cost_rate
     )
@@ -108,6 +147,7 @@ def analyse_development_plan(
     )
     nominal_profit = (
         net_completion_proceeds
+        + sum(item.net_cash_flow for item in predevelopment_years)
         - total_nominal_cost
         - project.asking_land_price * (1.0 + project.land_acquisition_cost_rate)
     )
@@ -141,6 +181,8 @@ def analyse_development_plan(
         gross_development_value=gdv,
         selling_costs=selling_costs,
         net_completion_proceeds=net_completion_proceeds,
+        predevelopment_years=tuple(predevelopment_years),
+        present_value_of_predevelopment_income=pv_predevelopment_income,
         development_years=tuple(development_years),
         total_nominal_development_cost=total_nominal_cost,
         present_value_of_development_cost=pv_cost,

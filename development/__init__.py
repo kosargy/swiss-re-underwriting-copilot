@@ -5,6 +5,7 @@ from .models import (
     DevelopmentAnalysis,
     DevelopmentPlan,
     DevelopmentProject,
+    PreDevelopmentYear,
     DevelopmentYear,
 )
 from .scenarios import DevelopmentComparison, compare_development_plans
@@ -15,6 +16,7 @@ __all__ = [
     "DevelopmentComparison",
     "DevelopmentPlan",
     "DevelopmentProject",
+    "PreDevelopmentYear",
     "DevelopmentSensitivityPoint",
     "DevelopmentYear",
     "analyse_development_plan",
