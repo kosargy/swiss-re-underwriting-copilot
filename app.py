@@ -8,6 +8,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from project_snapshot import build_project_snapshot, parse_project_snapshot
 from development import (
     DevelopmentPlan,
     DevelopmentProject,
@@ -38,6 +39,75 @@ from value_add import (
 )
 
 
+VALUE_ADD_WIDGET_KEYS = (
+    "va_name",
+    "va_location",
+    "va_purchase_price",
+    "va_current_rent",
+    "va_current_vacancy_pct",
+    "va_current_opex",
+    "va_current_cap_pct",
+    "va_acquisition_cost_pct",
+    "va_renovation_years",
+    "va_total_capex",
+    "va_income_retention_pct",
+    "va_stabilized_rent",
+    "va_stabilized_vacancy_pct",
+    "va_stabilized_opex",
+    "va_rent_growth_pct",
+    "va_expense_growth_pct",
+    "va_holding_period",
+    "va_ltv_pct",
+    "va_interest_pct",
+    "va_amortization_pct",
+    "va_discount_pct",
+    "va_exit_cap_pct",
+    "va_selling_cost_pct",
+    "va_target_unlevered_pct",
+    "va_target_levered_pct",
+)
+DEVELOPMENT_PROJECT_WIDGET_KEYS = (
+    "dev_project_name",
+    "dev_location",
+    "dev_asking_land_price",
+    "dev_land_acquisition_cost_pct",
+    "dev_plot_size",
+    "dev_density",
+    "dev_efficiency_pct",
+    "dev_discount_rate_pct",
+    "dev_cost_inflation_pct",
+    "dev_revenue_growth_pct",
+    "dev_professional_fees_pct",
+    "dev_contingency_pct",
+    "dev_selling_cost_pct",
+)
+DEVELOPMENT_PLAN_FIELDS = (
+    "probability",
+    "years",
+    "residential_share",
+    "condo_share",
+    "commercial_share",
+    "residential_rent",
+    "condo_price",
+    "commercial_rent",
+    "residential_cap",
+    "commercial_cap",
+    "residential_cost",
+    "condo_cost",
+    "commercial_cost",
+    "rental_parking",
+    "parking_rent",
+    "sale_parking",
+    "parking_sale_price",
+)
+DEVELOPMENT_WIDGET_KEYS = DEVELOPMENT_PROJECT_WIDGET_KEYS + tuple(
+    f"dev_{plan}_{field}"
+    for plan in ("a", "b")
+    for field in DEVELOPMENT_PLAN_FIELDS
+)
+PROJECT_WIDGET_KEYS = set(VALUE_ADD_WIDGET_KEYS + DEVELOPMENT_WIDGET_KEYS)
+
+
 st.set_page_config(
     page_title="Swiss RE Underwriting Copilot",
     page_icon="🏢",
@@ -57,6 +127,23 @@ if pending_payload:
     st.session_state["_active_deal_id"] = pending_payload.get("deal_id")
     st.session_state["_loaded_deal_notice"] = pending_payload.get("deal_name")
 
+pending_project_reset = st.session_state.pop("_pending_project_reset", None)
+if pending_project_reset:
+    for widget_key in pending_project_reset:
+        st.session_state.pop(widget_key, None)
+
+pending_project_snapshot = st.session_state.pop("_pending_project_snapshot", None)
+if pending_project_snapshot:
+    for widget_key, widget_value in pending_project_snapshot["widget_values"].items():
+        if widget_key in PROJECT_WIDGET_KEYS:
+            st.session_state[widget_key] = widget_value
+    st.session_state["experience_mode"] = "Full underwriting"
+    st.session_state["investment_strategy"] = pending_project_snapshot["strategy"]
+    st.session_state["_project_loaded_notice"] = pending_project_snapshot.get(
+        "project_name",
+        "Imported project",
+    )
+
 
 def chf(value: float) -> str:
     return f"CHF {value:,.0f}"
@@ -64,6 +151,79 @@ def chf(value: float) -> str:
 
 def percentage(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2%}"
+
+
+def _project_snapshot_bytes(
+    *,
+    strategy: str,
+    project_name: str,
+    widget_keys: tuple[str, ...],
+) -> bytes:
+    return build_project_snapshot(
+        strategy=strategy,
+        project_name=project_name,
+        widget_values={
+            key: st.session_state[key]
+            for key in widget_keys
+            if key in st.session_state
+        },
+    )
+
+
+def render_project_workspace(
+    *,
+    strategy: str,
+    project_name: str,
+    widget_keys: tuple[str, ...],
+    filename: str,
+    key_prefix: str,
+) -> None:
+    with st.expander("Project workspace · Save, load or reset"):
+        st.caption(
+            "Download a portable project file containing the visible assumptions. "
+            "It can be reopened locally or in the online app."
+        )
+        snapshot = _project_snapshot_bytes(
+            strategy=strategy,
+            project_name=project_name,
+            widget_keys=widget_keys,
+        )
+        st.download_button(
+            "Download project file",
+            data=snapshot,
+            file_name=filename,
+            mime="application/json",
+            use_container_width=True,
+            key=f"{key_prefix}_download_project",
+        )
+        uploaded = st.file_uploader(
+            "Open an existing project file",
+            type=["json"],
+            key=f"{key_prefix}_project_upload",
+        )
+        action_1, action_2 = st.columns(2)
+        if action_1.button(
+            "Load uploaded project",
+            disabled=uploaded is None,
+            use_container_width=True,
+            key=f"{key_prefix}_load_project",
+        ):
+            try:
+                st.session_state["_pending_project_snapshot"] = parse_project_snapshot(
+                    uploaded.getvalue(),
+                    expected_strategy=strategy,
+                    allowed_keys=widget_keys,
+                )
+                st.rerun()
+            except ValueError as error:
+                st.error(f"The project file could not be loaded: {error}")
+        if action_2.button(
+            "Reset this workflow",
+            use_container_width=True,
+            key=f"{key_prefix}_reset_project",
+        ):
+            st.session_state["_pending_project_reset"] = list(widget_keys)
+            st.rerun()
 
 
 def render_interview_demo() -> None:
@@ -709,6 +869,13 @@ def render_value_add_workflow() -> None:
         use_container_width=True,
         key="download_value_add_memo",
     )
+    render_project_workspace(
+        strategy="Value-Add / Repositioning",
+        project_name=va_name,
+        widget_keys=VALUE_ADD_WIDGET_KEYS,
+        filename="value_add_project.json",
+        key_prefix="va_workspace",
+    )
 
 
 def render_development_workflow() -> None:
@@ -1299,16 +1466,25 @@ def render_development_workflow() -> None:
             "probabilities represent alternative planning/outcome assumptions; "
             "the highest-value plan is shown separately from the probability-weighted result."
         )
+        render_project_workspace(
+            strategy="Ground-Up Development",
+            project_name=dev_project_name,
+            widget_keys=DEVELOPMENT_WIDGET_KEYS,
+            filename="development_project.json",
+            key_prefix="dev_workspace",
+        )
 
 
 
 st.title("Swiss Real Estate Underwriting Copilot")
 st.caption(
     "Decision support for core acquisitions, value-add strategies and "
-    "ground-up developments · Portfolio MVP v0.9"
+    "ground-up developments · Portfolio MVP v1.0"
 )
 if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")
+if project_loaded_name := st.session_state.pop("_project_loaded_notice", None):
+    st.success(f"Loaded project: {project_loaded_name}")
 
 experience_mode = st.segmented_control(
     "Experience",

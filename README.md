@@ -102,6 +102,15 @@ CapEx that produces the same zero-NPV result at the entered asking price. The
 first version assumes renovation CapEx is equity-funded; this is stated in the
 interface so the financing convention remains auditable.
 
+## Portable project workspace
+
+The Value-Add and Development workflows include a **Project workspace** panel.
+It can download all visible assumptions as a small, versioned JSON project file,
+open a compatible project file later, or reset the workflow to its defaults.
+Only recognized input fields are restored; unknown fields and files belonging to
+another strategy are rejected. This makes interview cases portable between the
+local and hosted app without storing confidential documents or hidden data.
+
 ## Included case
 
 `examples/zurich_residential.json` is a fictional but realistic Swiss
@@ -173,4 +182,4 @@ of treating it as a black box.
 ## Planned next deliverables
 
 1. PDF and rent-roll extraction with source citations
-2. Saved-deal pipeline and decision history
+2. Research feedback workflow and anonymized usage analytics
