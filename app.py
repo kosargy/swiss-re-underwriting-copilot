@@ -174,7 +174,7 @@ def render_executive_summary(
 ) -> None:
     """Present the investment conclusion before the detailed underwriting."""
     st.markdown("##### Executive Deal Summary")
-    if recommendation.startswith(("ATTRACTIVE", "FEASIBLE")):
+    if recommendation.startswith(("ATTRACTIVE", "FEASIBLE", "PROCEED")):
         st.success(recommendation)
     elif recommendation.startswith("NEGOTIATE"):
         st.warning(recommendation)
@@ -1700,6 +1700,18 @@ if project_loaded_name := st.session_state.pop("_project_loaded_notice", None):
 if widget_update_notice := st.session_state.pop("_widget_update_notice", None):
     st.success(widget_update_notice)
 
+with st.expander("About this product"):
+    about_1, about_2, about_3 = st.columns(3)
+    with about_1:
+        st.markdown("**The problem**")
+        st.write("Early-stage real-estate decisions are fragmented across spreadsheets, documents and manual checks.")
+    with about_2:
+        st.markdown("**The product**")
+        st.write("One transparent workflow turns assumptions into pricing limits, returns, risks and an IC recommendation.")
+    with about_3:
+        st.markdown("**The boundary**")
+        st.write("A decision-support prototype—not a certified appraisal, legal opinion or substitute for due diligence.")
+
 experience_mode = st.segmented_control(
     "Experience",
     options=["Full underwriting", "3-minute interview demo"],
@@ -1734,19 +1746,23 @@ investment_strategy = st.segmented_control(
 if investment_strategy is None:
     investment_strategy = "Core Acquisition"
 st.caption(strategy_options[investment_strategy])
-
-if investment_strategy != "Core Acquisition":
-    st.segmented_control(
-        "Analysis view",
-        options=["Quick underwriting", "Full analysis"],
-        default="Quick underwriting",
-        selection_mode="single",
-        key="analysis_depth",
-        help=(
-            "Quick underwriting shows the decision and essential outputs. Full analysis "
-            "adds detailed cash flows, sensitivities and specialist tools."
-        ),
-    )
+demo_case_names = {
+    "Core Acquisition": "Limmat Residential Case",
+    "Value-Add / Repositioning": "Zürich Residential Repositioning",
+    "Ground-Up Development": "Limmat Development Site",
+}
+st.caption(f"Fictional demonstration case: {demo_case_names[investment_strategy]}")
+st.segmented_control(
+    "Analysis view",
+    options=["Quick underwriting", "Full analysis"],
+    default="Quick underwriting",
+    selection_mode="single",
+    key="analysis_depth",
+    help=(
+        "Quick underwriting shows the decision and essential outputs. Full analysis "
+        "adds detailed cash flows, sensitivities and specialist tools."
+    ),
+)
 
 if investment_strategy == "Ground-Up Development":
     render_development_workflow()
@@ -1803,25 +1819,29 @@ with st.sidebar:
         "All calculations are transparent and based on the assumptions shown in the app."
     )
 
-(
-    input_tab,
-    analysis_tab,
-    scenarios_tab,
-    benchmark_tab,
-    comparables_tab,
-    decision_tab,
-    library_tab,
-) = st.tabs(
-    [
-        "1 · Deal inputs",
-        "2 · Base analysis",
-        "3 · Scenarios",
-        "4 · Market benchmarking",
-        "5 · Comparable properties",
-        "6 · Risks & decision",
-        "7 · Deal library",
-    ]
-)
+core_quick_view = st.session_state.get("analysis_depth") == "Quick underwriting"
+if core_quick_view:
+    input_tab = st.container()
+else:
+    (
+        input_tab,
+        analysis_tab,
+        scenarios_tab,
+        benchmark_tab,
+        comparables_tab,
+        decision_tab,
+        library_tab,
+    ) = st.tabs(
+        [
+            "1 · Deal inputs",
+            "2 · Base analysis",
+            "3 · Scenarios",
+            "4 · Market benchmarking",
+            "5 · Comparable properties",
+            "6 · Risks & decision",
+            "7 · Deal library",
+        ]
+    )
 
 with input_tab:
     st.subheader("Property and operating assumptions")
@@ -1999,6 +2019,62 @@ criteria = InvestmentCriteria(
 base = analyse_investment(property_assumptions, financing_assumptions)
 scenario_results = standard_scenarios(property_assumptions, financing_assumptions)
 decision = make_decision(base, scenario_results, criteria)
+
+if core_quick_view:
+    st.divider()
+    st.markdown("#### Investment decision")
+    core_primary_risk = (
+        decision.risks[0].finding
+        if decision.risks
+        else "No material risk threshold was breached by the rule-based screening."
+    )
+    core_next_action = (
+        f"Proceed to market and technical due diligence without offering more than {chf(decision.recommended_price)}."
+        if decision.recommendation.startswith("PROCEED")
+        else f"Reprice the offer to approximately {chf(decision.recommended_price)} or reject the current terms."
+    )
+    render_executive_summary(
+        recommendation=decision.recommendation,
+        asking_price=purchase_price,
+        maximum_price=decision.recommended_price,
+        return_label="Levered IRR",
+        return_value=percentage(base.levered_irr),
+        thesis=(
+            f"Year-one NOI is {chf(base.year_one_noi)} and the base-case DCF value is "
+            f"{chf(base.dcf_value)} versus the seller's asking price."
+        ),
+        primary_risk=core_primary_risk,
+        next_action=core_next_action,
+    )
+    with st.expander(f"Risk challenge · {len(decision.risks)} flagged item(s)"):
+        if decision.risks:
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Severity": item.severity,
+                            "Category": item.category,
+                            "Finding": item.finding,
+                            "Required action": item.action,
+                        }
+                        for item in decision.risks
+                    ]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.success("No automated risk threshold was breached in the base case.")
+    core_memo = build_ic_memo(base, scenario_results, decision, criteria)
+    st.download_button(
+        "Download Investment Committee memo (PDF)",
+        data=core_memo,
+        file_name="core_acquisition_investment_committee_memo.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+        key="download_core_memo_quick",
+    )
+    st.stop()
 
 with analysis_tab:
     recommendation_colors = {
