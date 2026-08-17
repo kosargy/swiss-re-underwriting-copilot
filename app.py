@@ -10,6 +10,7 @@ import streamlit as st
 
 from project_snapshot import build_project_snapshot, parse_project_snapshot
 from readiness import assess_development_readiness, assess_value_add_readiness
+from rent_roll import analyse_rent_roll, parse_rent_roll_csv, rent_roll_template
 from development import (
     DevelopmentPlan,
     DevelopmentProject,
@@ -153,6 +154,12 @@ if pending_project_snapshot:
         "Imported project",
     )
 
+pending_widget_updates = st.session_state.pop("_pending_widget_updates", None)
+if pending_widget_updates:
+    for widget_key, widget_value in pending_widget_updates.items():
+        st.session_state[widget_key] = widget_value
+    st.session_state["_widget_update_notice"] = "Rent-roll assumptions applied to underwriting."
+
 
 def chf(value: float) -> str:
     return f"CHF {value:,.0f}"
@@ -268,6 +275,60 @@ def render_evidence_register(
             st.warning("Material evidence remains unrequested; the case is not ready for final approval.")
         else:
             st.info("Evidence collection is in progress. Verify the sources before final IC approval.")
+
+
+def render_rent_roll_intelligence() -> None:
+    with st.expander("Rent Roll Intelligence · CSV import"):
+        st.caption(
+            "Upload a unit-level rent roll to calculate potential rent, economic "
+            "vacancy, tenant concentration and near-term lease expiries."
+        )
+        st.download_button(
+            "Download rent-roll CSV template",
+            data=rent_roll_template(),
+            file_name="rent_roll_template.csv",
+            mime="text/csv",
+            key="va_download_rent_roll_template",
+        )
+        uploaded = st.file_uploader(
+            "Upload completed rent roll",
+            type=["csv"],
+            key="va_rent_roll_upload",
+        )
+        if uploaded is None:
+            st.info("Use the template columns exactly; annual_rent should include occupied and vacant units.")
+            return
+        try:
+            if uploaded.size > 2_000_000:
+                raise ValueError("Rent roll is larger than 2 MB")
+            analysis = analyse_rent_roll(parse_rent_roll_csv(uploaded.getvalue()))
+        except ValueError as error:
+            st.error(f"The rent roll could not be analysed: {error}")
+            return
+
+        metric_1, metric_2, metric_3, metric_4 = st.columns(4)
+        metric_1.metric("Potential annual rent", chf(analysis.potential_annual_rent))
+        metric_2.metric("Passing annual rent", chf(analysis.passing_annual_rent))
+        metric_3.metric("Economic vacancy", percentage(analysis.economic_vacancy_rate))
+        metric_4.metric("Largest tenant share", percentage(analysis.largest_tenant_share))
+        st.write(
+            f"**{analysis.occupied_units} occupied / {analysis.vacant_units} vacant units** · "
+            f"**{analysis.leases_expiring_within_12_months} leases** expire within 12 months."
+        )
+        if analysis.largest_tenant_share > 0.25:
+            st.warning("Tenant concentration exceeds 25% of passing rent and should be challenged.")
+        if analysis.leases_expiring_within_12_months:
+            st.warning("Near-term lease expiries create renewal and downtime risk.")
+        if st.button(
+            "Apply rent and vacancy to underwriting",
+            use_container_width=True,
+            key="va_apply_rent_roll",
+        ):
+            st.session_state["_pending_widget_updates"] = {
+                "va_current_rent": analysis.potential_annual_rent,
+                "va_current_vacancy_pct": analysis.economic_vacancy_rate * 100,
+            }
+            st.rerun()
 
 
 def _project_snapshot_bytes(
@@ -643,6 +704,7 @@ def render_value_add_workflow() -> None:
                 step=0.25,
                 key="va_acquisition_cost_pct",
             )
+        render_rent_roll_intelligence()
 
     with plan_tab:
         plan_1, plan_2, plan_3 = st.columns(3)
@@ -1668,6 +1730,8 @@ if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")
 if project_loaded_name := st.session_state.pop("_project_loaded_notice", None):
     st.success(f"Loaded project: {project_loaded_name}")
+if widget_update_notice := st.session_state.pop("_widget_update_notice", None):
+    st.success(widget_update_notice)
 
 experience_mode = st.segmented_control(
     "Experience",
