@@ -14,6 +14,7 @@ from rent_roll import analyse_rent_roll, parse_rent_roll_csv, rent_roll_template
 from development import (
     DevelopmentPlan,
     DevelopmentProject,
+    build_cap_rate,
     compare_development_plans,
     development_sensitivity_grid,
 )
@@ -89,6 +90,20 @@ DEVELOPMENT_PROJECT_WIDGET_KEYS = (
     "dev_predevelopment_growth_pct",
     "dev_predevelopment_years",
     "dev_predevelopment_termination_cost",
+    "dev_cap_location",
+    "dev_cap_commercial_use",
+    "dev_cap_risk_free_pct",
+    "dev_cap_re_risk_pct",
+    "dev_cap_res_object_pct",
+    "dev_cap_com_object_pct",
+    "dev_cap_res_growth_pct",
+    "dev_cap_com_growth_pct",
+    "dev_cap_res_opex_pct",
+    "dev_cap_com_opex_pct",
+    "dev_cap_res_vacancy_pct",
+    "dev_cap_com_vacancy_pct",
+    "dev_cap_res_repairs_pct",
+    "dev_cap_com_repairs_pct",
 )
 DEVELOPMENT_PLAN_FIELDS = (
     "probability",
@@ -1235,6 +1250,229 @@ def render_development_workflow() -> None:
             dev_predevelopment_years = 0
             dev_predevelopment_termination_cost = 0.0
 
+    residential_cap_build = None
+    commercial_cap_build = None
+    with st.expander("Optional · Cap Rate Builder", expanded=False):
+        st.caption(
+            "Build an indicative gross capitalization rate from transparent risk, "
+            "location, growth and property-cost components. Based on the methodology "
+            "and reference premiums in Template_Project_Values.xlsx."
+        )
+        basis_1, basis_2, basis_3, basis_4 = st.columns(4)
+        dev_cap_location = basis_1.selectbox(
+            "Macro location",
+            [
+                "Large city · central",
+                "Large city · agglomeration",
+                "Small city",
+                "Rural",
+            ],
+            key="dev_cap_location",
+        )
+        dev_cap_commercial_use = basis_2.selectbox(
+            "Commercial use",
+            ["Office", "Retail", "Industry / logistics"],
+            key="dev_cap_commercial_use",
+        )
+        dev_cap_risk_free_pct = basis_3.number_input(
+            "Real long-term risk-free rate (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=1.0,
+            step=0.10,
+            key="dev_cap_risk_free_pct",
+        )
+        dev_cap_re_risk_pct = basis_4.number_input(
+            "Real-estate risk premium (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=1.0,
+            step=0.10,
+            key="dev_cap_re_risk_pct",
+        )
+
+        st.caption("Property-specific assumptions (% of gross rental income where applicable)")
+        cap_header_1, cap_header_2 = st.columns(2)
+        cap_header_1.markdown("**Residential**")
+        cap_header_2.markdown(f"**Commercial · {dev_cap_commercial_use}**")
+        object_1, object_2 = st.columns(2)
+        dev_cap_res_object_pct = object_1.number_input(
+            "Object-specific premium · Residential (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.5,
+            step=0.10,
+            key="dev_cap_res_object_pct",
+        )
+        dev_cap_com_object_pct = object_2.number_input(
+            "Object-specific premium · Commercial (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=1.0,
+            step=0.10,
+            key="dev_cap_com_object_pct",
+        )
+        growth_1, growth_2 = st.columns(2)
+        dev_cap_res_growth_pct = growth_1.number_input(
+            "Real rental growth · Residential (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=0.10,
+            key="dev_cap_res_growth_pct",
+        )
+        dev_cap_com_growth_pct = growth_2.number_input(
+            "Real rental growth · Commercial (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=0.0,
+            step=0.10,
+            key="dev_cap_com_growth_pct",
+        )
+        opex_1, opex_2 = st.columns(2)
+        dev_cap_res_opex_pct = opex_1.number_input(
+            "Operating costs · Residential (%)",
+            min_value=0.0,
+            max_value=99.0,
+            value=8.0,
+            step=0.5,
+            key="dev_cap_res_opex_pct",
+        )
+        dev_cap_com_opex_pct = opex_2.number_input(
+            "Operating costs · Commercial (%)",
+            min_value=0.0,
+            max_value=99.0,
+            value=10.0,
+            step=0.5,
+            key="dev_cap_com_opex_pct",
+        )
+        vacancy_1, vacancy_2 = st.columns(2)
+        dev_cap_res_vacancy_pct = vacancy_1.number_input(
+            "Loss of earnings · Residential (%)",
+            min_value=0.0,
+            max_value=99.0,
+            value=2.0,
+            step=0.5,
+            key="dev_cap_res_vacancy_pct",
+        )
+        dev_cap_com_vacancy_pct = vacancy_2.number_input(
+            "Loss of earnings · Commercial (%)",
+            min_value=0.0,
+            max_value=99.0,
+            value=4.0,
+            step=0.5,
+            key="dev_cap_com_vacancy_pct",
+        )
+        repairs_1, repairs_2 = st.columns(2)
+        dev_cap_res_repairs_pct = repairs_1.number_input(
+            "Repair reserve · Residential (%)",
+            min_value=0.0,
+            max_value=99.0,
+            value=8.0,
+            step=0.5,
+            key="dev_cap_res_repairs_pct",
+        )
+        dev_cap_com_repairs_pct = repairs_2.number_input(
+            "Repair reserve · Commercial (%)",
+            min_value=0.0,
+            max_value=99.0,
+            value=8.0,
+            step=0.5,
+            key="dev_cap_com_repairs_pct",
+        )
+        try:
+            residential_cap_build = build_cap_rate(
+                use="Residential",
+                location=dev_cap_location,
+                risk_free_rate=dev_cap_risk_free_pct / 100,
+                real_estate_risk_premium=dev_cap_re_risk_pct / 100,
+                object_specific_premium=dev_cap_res_object_pct / 100,
+                real_rental_growth=dev_cap_res_growth_pct / 100,
+                operating_cost_rate=dev_cap_res_opex_pct / 100,
+                vacancy_rate=dev_cap_res_vacancy_pct / 100,
+                repair_reserve_rate=dev_cap_res_repairs_pct / 100,
+            )
+            commercial_cap_build = build_cap_rate(
+                use=dev_cap_commercial_use,
+                location=dev_cap_location,
+                risk_free_rate=dev_cap_risk_free_pct / 100,
+                real_estate_risk_premium=dev_cap_re_risk_pct / 100,
+                object_specific_premium=dev_cap_com_object_pct / 100,
+                real_rental_growth=dev_cap_com_growth_pct / 100,
+                operating_cost_rate=dev_cap_com_opex_pct / 100,
+                vacancy_rate=dev_cap_com_vacancy_pct / 100,
+                repair_reserve_rate=dev_cap_com_repairs_pct / 100,
+            )
+        except ValueError as error:
+            st.error(str(error))
+        if residential_cap_build and commercial_cap_build:
+            result_1, result_2 = st.columns(2)
+            result_1.metric(
+                "Suggested residential gross cap rate",
+                percentage(residential_cap_build.gross_cap_rate),
+                f"Net {percentage(residential_cap_build.net_cap_rate)}",
+            )
+            result_2.metric(
+                "Suggested commercial gross cap rate",
+                percentage(commercial_cap_build.gross_cap_rate),
+                f"Net {percentage(commercial_cap_build.net_cap_rate)}",
+            )
+            bridge_frame = pd.DataFrame(
+                {
+                    "Component": [
+                        "Risk-free rate",
+                        "Real-estate risk",
+                        "Use premium",
+                        "Location premium",
+                        "Object-specific premium",
+                        "Less: real rental growth",
+                        "Net cap rate",
+                        "Gross cap rate",
+                    ],
+                    "Residential": [
+                        residential_cap_build.risk_free_rate,
+                        residential_cap_build.real_estate_risk_premium,
+                        residential_cap_build.use_premium,
+                        residential_cap_build.location_premium,
+                        residential_cap_build.object_specific_premium,
+                        -residential_cap_build.real_rental_growth,
+                        residential_cap_build.net_cap_rate,
+                        residential_cap_build.gross_cap_rate,
+                    ],
+                    "Commercial": [
+                        commercial_cap_build.risk_free_rate,
+                        commercial_cap_build.real_estate_risk_premium,
+                        commercial_cap_build.use_premium,
+                        commercial_cap_build.location_premium,
+                        commercial_cap_build.object_specific_premium,
+                        -commercial_cap_build.real_rental_growth,
+                        commercial_cap_build.net_cap_rate,
+                        commercial_cap_build.gross_cap_rate,
+                    ],
+                }
+            )
+            bridge_frame[["Residential", "Commercial"]] *= 100
+            st.dataframe(
+                bridge_frame,
+                hide_index=True,
+                use_container_width=True,
+                column_config={
+                    "Residential": st.column_config.NumberColumn(format="%.2f%%"),
+                    "Commercial": st.column_config.NumberColumn(format="%.2f%%"),
+                },
+            )
+            if st.button(
+                "Apply suggested cap rates to Plan A and Plan B",
+                type="primary",
+                key="dev_apply_cap_builder",
+            ):
+                residential_pct = residential_cap_build.gross_cap_rate * 100
+                commercial_pct = commercial_cap_build.gross_cap_rate * 100
+                for plan_prefix in ("dev_a", "dev_b"):
+                    st.session_state[f"{plan_prefix}_residential_cap"] = residential_pct
+                    st.session_state[f"{plan_prefix}_commercial_cap"] = commercial_pct
+                st.success("Suggested rates applied. You can still override them in each plan.")
+
     development_project = DevelopmentProject(
         name=dev_project_name,
         location=dev_location,
@@ -1363,21 +1601,23 @@ def render_development_workflow() -> None:
             key=f"{prefix}_commercial_rent",
         )
         cap_1, cap_2 = st.columns(2)
+        residential_cap_key = f"{prefix}_residential_cap"
         residential_cap_pct = cap_1.number_input(
             "Residential exit cap rate (%)",
             min_value=0.01,
             max_value=100.0,
-            value=3.75,
             step=0.10,
-            key=f"{prefix}_residential_cap",
+            key=residential_cap_key,
+            **({"value": 3.75} if residential_cap_key not in st.session_state else {}),
         )
+        commercial_cap_key = f"{prefix}_commercial_cap"
         commercial_cap_pct = cap_2.number_input(
             "Commercial exit cap rate (%)",
             min_value=0.01,
             max_value=100.0,
-            value=4.75,
             step=0.10,
-            key=f"{prefix}_commercial_cap",
+            key=commercial_cap_key,
+            **({"value": 4.75} if commercial_cap_key not in st.session_state else {}),
         )
 
         st.caption("Construction and parking assumptions")

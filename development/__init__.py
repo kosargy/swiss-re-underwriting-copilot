@@ -1,5 +1,6 @@
 """Development feasibility and residual land valuation engine."""
 
+from .cap_rate import CapRateBuild, build_cap_rate
 from .engine import analyse_development_plan
 from .models import (
     DevelopmentAnalysis,
@@ -19,7 +20,9 @@ __all__ = [
     "PreDevelopmentYear",
     "DevelopmentSensitivityPoint",
     "DevelopmentYear",
+    "CapRateBuild",
     "analyse_development_plan",
     "compare_development_plans",
     "development_sensitivity_grid",
+    "build_cap_rate",
 ]

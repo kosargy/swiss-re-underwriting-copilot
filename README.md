@@ -87,6 +87,13 @@ that continue producing income before construction. The model deducts vacancy,
 operating expenses and a final termination or demolition cost, discounts the net
 interim cash flows and shifts the construction and completion dates accordingly.
 
+The optional **Cap Rate Builder** reconstructs the workbook's transparent
+capitalization-rate bridge: real risk-free rate, real-estate risk, use and
+macro-location premiums, property-specific risk and real rent growth produce a
+net rate; operating costs, vacancy and repair reserves convert it to an
+indicative gross rate. Residential and commercial recommendations remain
+editable and are applied to the development plans only when the user confirms.
+
 Plan probabilities must total 100%. They produce a probability-weighted land
 value, while the app separately identifies the plan with the highest residual
 value. All results are preliminary decision-support outputs, not a certified
