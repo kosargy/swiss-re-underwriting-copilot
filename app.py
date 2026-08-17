@@ -9,6 +9,7 @@ import plotly.express as px
 import streamlit as st
 
 from project_snapshot import build_project_snapshot, parse_project_snapshot
+from readiness import assess_development_readiness, assess_value_add_readiness
 from development import (
     DevelopmentPlan,
     DevelopmentProject,
@@ -194,6 +195,29 @@ def render_executive_summary(
     with narrative_3:
         st.markdown("**Recommended next action**")
         st.write(next_action)
+
+
+def render_readiness_gate(assessment) -> None:
+    with st.expander(
+        f"IC Readiness Gate · {assessment.score}/100 · {assessment.status}",
+        expanded=assessment.status == "NOT IC READY",
+    ):
+        st.caption(
+            "A rule-based challenge of pricing, returns and key underwriting assumptions. "
+            "It identifies evidence gaps; it does not replace professional due diligence."
+        )
+        severity_icon = {"Critical": "🔴", "Warning": "🟠", "Passed": "🟢"}
+        frame = pd.DataFrame(
+            [
+                {
+                    "Status": f"{severity_icon[item.severity]} {item.severity}",
+                    "IC check": item.check,
+                    "Conclusion": item.conclusion,
+                }
+                for item in assessment.findings
+            ]
+        )
+        st.dataframe(frame, use_container_width=True, hide_index=True)
 
 
 def _project_snapshot_bytes(
@@ -799,6 +823,7 @@ def render_value_add_workflow() -> None:
         primary_risk=value_add_risk,
         next_action=value_add_next_action,
     )
+    render_readiness_gate(assess_value_add_readiness(result))
     st.markdown("##### Detailed underwriting")
     decision_1, decision_2, decision_3, decision_4 = st.columns(4)
     decision_1.metric("As-is value", chf(result.as_is_value))
@@ -1360,6 +1385,9 @@ def render_development_workflow() -> None:
                 "sales/rental assumptions and planning delays."
             ),
             next_action=development_next_action,
+        )
+        render_readiness_gate(
+            assess_development_readiness(development_project, comparison)
         )
         st.markdown("##### Detailed feasibility")
         decision_1, decision_2, decision_3, decision_4 = st.columns(4)
