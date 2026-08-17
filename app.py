@@ -67,10 +67,6 @@ VALUE_ADD_WIDGET_KEYS = (
     "va_selling_cost_pct",
     "va_target_unlevered_pct",
     "va_target_levered_pct",
-) + tuple(
-    f"va_evidence_{index}_{field}"
-    for index in range(1, 6)
-    for field in ("status", "note")
 )
 DEVELOPMENT_PROJECT_WIDGET_KEYS = (
     "dev_project_name",
@@ -110,10 +106,6 @@ DEVELOPMENT_WIDGET_KEYS = DEVELOPMENT_PROJECT_WIDGET_KEYS + tuple(
     f"dev_{plan}_{field}"
     for plan in ("a", "b")
     for field in DEVELOPMENT_PLAN_FIELDS
-) + tuple(
-    f"dev_evidence_{index}_{field}"
-    for index in range(1, 6)
-    for field in ("status", "note")
 )
 PROJECT_WIDGET_KEYS = set(VALUE_ADD_WIDGET_KEYS + DEVELOPMENT_WIDGET_KEYS)
 
@@ -233,48 +225,6 @@ def render_readiness_gate(assessment) -> None:
             ]
         )
         st.dataframe(frame, use_container_width=True, hide_index=True)
-
-
-def render_evidence_register(
-    *,
-    items: tuple[tuple[str, str], ...],
-    key_prefix: str,
-) -> None:
-    with st.expander("Due Diligence Evidence Register"):
-        st.caption(
-            "Track the evidence behind the most material assumptions. Store only a "
-            "short reference or conclusion here—not confidential source documents."
-        )
-        statuses: list[str] = []
-        rows: list[dict[str, str]] = []
-        for index, (evidence_name, purpose) in enumerate(items, start=1):
-            st.markdown(f"**{index}. {evidence_name}**")
-            st.caption(purpose)
-            status_col, note_col = st.columns([1, 2])
-            status = status_col.selectbox(
-                f"Status · {evidence_name}",
-                options=["Not requested", "Requested", "Received", "Verified"],
-                key=f"{key_prefix}_evidence_{index}_status",
-                label_visibility="collapsed",
-            )
-            note = note_col.text_input(
-                f"Reference or conclusion · {evidence_name}",
-                placeholder="e.g. broker data room / valuation report / pending adviser review",
-                key=f"{key_prefix}_evidence_{index}_note",
-                label_visibility="collapsed",
-            )
-            statuses.append(status)
-            rows.append({"Evidence": evidence_name, "Status": status, "Reference": note})
-
-        weights = {"Not requested": 0.0, "Requested": 0.25, "Received": 0.60, "Verified": 1.0}
-        evidence_score = sum(weights[status] for status in statuses) / len(statuses)
-        st.progress(evidence_score, text=f"Evidence completion · {evidence_score:.0%}")
-        if all(status == "Verified" for status in statuses):
-            st.success("All priority evidence has been marked as verified.")
-        elif any(status == "Not requested" for status in statuses):
-            st.warning("Material evidence remains unrequested; the case is not ready for final approval.")
-        else:
-            st.info("Evidence collection is in progress. Verify the sources before final IC approval.")
 
 
 def render_rent_roll_intelligence() -> None:
@@ -704,7 +654,8 @@ def render_value_add_workflow() -> None:
                 step=0.25,
                 key="va_acquisition_cost_pct",
             )
-        render_rent_roll_intelligence()
+        if st.session_state.get("analysis_depth") == "Full analysis":
+            render_rent_roll_intelligence()
 
     with plan_tab:
         plan_1, plan_2, plan_3 = st.columns(3)
@@ -936,16 +887,24 @@ def render_value_add_workflow() -> None:
         next_action=value_add_next_action,
     )
     render_readiness_gate(assess_value_add_readiness(result))
-    render_evidence_register(
-        key_prefix="va",
-        items=(
-            ("Current rent roll and lease abstracts", "Validate occupancy, passing rent, expiries and tenant concentration."),
-            ("Independent market-rent comparables", "Support the stabilized rent and leasing assumptions."),
-            ("Quantity-surveyor / contractor CapEx budget", "Validate renovation scope, cost, timing and contingency."),
-            ("Technical and environmental review", "Identify deferred maintenance, defects and environmental liabilities."),
-            ("Financing term sheet", "Confirm leverage, pricing, amortization and covenant headroom."),
-        ),
-    )
+    if st.session_state.get("analysis_depth") == "Quick underwriting":
+        value_add_memo = build_value_add_memo(result)
+        st.download_button(
+            "Download Investment Committee memo (PDF)",
+            data=value_add_memo,
+            file_name="value_add_investment_committee_memo.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="download_value_add_memo_quick",
+        )
+        render_project_workspace(
+            strategy="Value-Add / Repositioning",
+            project_name=va_name,
+            widget_keys=VALUE_ADD_WIDGET_KEYS,
+            filename="value_add_project.json",
+            key_prefix="va_workspace_quick",
+        )
+        return
     st.markdown("##### Detailed underwriting")
     decision_1, decision_2, decision_3, decision_4 = st.columns(4)
     decision_1.metric("As-is value", chf(result.as_is_value))
@@ -1511,16 +1470,24 @@ def render_development_workflow() -> None:
         render_readiness_gate(
             assess_development_readiness(development_project, comparison)
         )
-        render_evidence_register(
-            key_prefix="dev",
-            items=(
-                ("Planning and zoning opinion", "Confirm permitted use, density, height and approval pathway."),
-                ("Architect area schedule", "Validate gross area, efficiency and saleable/rentable area."),
-                ("Contractor or quantity-surveyor estimate", "Support construction cost, escalation and contingency."),
-                ("Sales and rental market evidence", "Validate exit prices, rents, absorption and capitalization rates."),
-                ("Development programme and adviser review", "Confirm milestones, approval risk and delivery duration."),
-            ),
-        )
+        if st.session_state.get("analysis_depth") == "Quick underwriting":
+            development_memo = build_development_memo(development_project, comparison)
+            st.download_button(
+                "Download Investment Committee memo (PDF)",
+                data=development_memo,
+                file_name="development_investment_committee_memo.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_development_memo_quick",
+            )
+            render_project_workspace(
+                strategy="Ground-Up Development",
+                project_name=dev_project_name,
+                widget_keys=DEVELOPMENT_WIDGET_KEYS,
+                filename="development_project.json",
+                key_prefix="dev_workspace_quick",
+            )
+            return
         st.markdown("##### Detailed feasibility")
         decision_1, decision_2, decision_3, decision_4 = st.columns(4)
         decision_1.metric(
@@ -1767,6 +1734,19 @@ investment_strategy = st.segmented_control(
 if investment_strategy is None:
     investment_strategy = "Core Acquisition"
 st.caption(strategy_options[investment_strategy])
+
+if investment_strategy != "Core Acquisition":
+    st.segmented_control(
+        "Analysis view",
+        options=["Quick underwriting", "Full analysis"],
+        default="Quick underwriting",
+        selection_mode="single",
+        key="analysis_depth",
+        help=(
+            "Quick underwriting shows the decision and essential outputs. Full analysis "
+            "adds detailed cash flows, sensitivities and specialist tools."
+        ),
+    )
 
 if investment_strategy == "Ground-Up Development":
     render_development_workflow()
