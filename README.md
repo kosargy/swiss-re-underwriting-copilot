@@ -12,6 +12,9 @@ The interface is organized by investment strategy:
 - **Ground-Up Development** for land acquisition and new construction
 
 Only the workflow relevant to the selected strategy is displayed.
+The sidebar also adapts to that strategy: it keeps project identity and the
+decision thresholds that actually drive each model in one consistent place,
+while operating, financing and valuation assumptions remain in the main workflow.
 
 An additional **3-minute interview demo** loads a curated Value-Add case and
 guides the presenter from opportunity to business plan, base-case decision and

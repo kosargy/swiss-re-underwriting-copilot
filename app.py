@@ -598,6 +598,10 @@ Committee memo with the decision, risks and required due diligence.”
 
 
 def render_value_add_workflow() -> None:
+    va_name = st.session_state.get("va_name", "Zürich Residential Repositioning")
+    va_location = st.session_state.get("va_location", "Zürich, Switzerland")
+    va_target_unlevered_pct = st.session_state.get("va_target_unlevered_pct", 7.0)
+    va_target_levered_pct = st.session_state.get("va_target_levered_pct", 10.0)
     st.divider()
     st.subheader("Value-Add / Repositioning")
     st.caption(
@@ -619,16 +623,6 @@ def render_value_add_workflow() -> None:
     with current_tab:
         current_1, current_2, current_3 = st.columns(3)
         with current_1:
-            va_name = st.text_input(
-                "Project name",
-                "Zürich Residential Repositioning",
-                key="va_name",
-            )
-            va_location = st.text_input(
-                "Location",
-                "Zürich, Switzerland",
-                key="va_location",
-            )
             va_purchase_price = st.number_input(
                 "Asking price (CHF)",
                 min_value=100_000.0,
@@ -811,21 +805,10 @@ def render_value_add_workflow() -> None:
                 key="va_selling_cost_pct",
             )
         with finance_3:
-            va_target_unlevered_pct = st.number_input(
-                "Target unlevered IRR (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=7.0,
-                step=0.25,
-                key="va_target_unlevered_pct",
-            )
-            va_target_levered_pct = st.number_input(
-                "Target levered IRR (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=10.0,
-                step=0.25,
-                key="va_target_levered_pct",
+            st.info(
+                "Decision targets are set in the sidebar: "
+                f"{va_target_unlevered_pct:.2f}% unlevered IRR and "
+                f"{va_target_levered_pct:.2f}% levered IRR."
             )
 
     renovation_years = int(va_renovation_years)
@@ -1072,6 +1055,10 @@ def render_value_add_workflow() -> None:
 
 
 def render_development_workflow() -> None:
+    dev_project_name = st.session_state.get("dev_project_name", "Limmat Development Site")
+    dev_location = st.session_state.get("dev_location", "Zürich, Switzerland")
+    dev_discount_rate_pct = st.session_state.get("dev_discount_rate_pct", 8.0)
+    dev_contingency_pct = st.session_state.get("dev_contingency_pct", 7.5)
     st.subheader("Development feasibility & residual land value")
     st.caption(
         "Test alternative development concepts and calculate the maximum land price "
@@ -1085,16 +1072,6 @@ def render_development_workflow() -> None:
     st.markdown("#### 1 · Site and project assumptions")
     project_col_1, project_col_2, project_col_3 = st.columns(3)
     with project_col_1:
-        dev_project_name = st.text_input(
-            "Project name",
-            "Limmat Development Site",
-            key="dev_project_name",
-        )
-        dev_location = st.text_input(
-            "Location",
-            "Zürich, Switzerland",
-            key="dev_location",
-        )
         dev_asking_land_price = st.number_input(
             "Asking land price (CHF)",
             min_value=0.0,
@@ -1133,14 +1110,6 @@ def render_development_workflow() -> None:
             step=1.0,
             key="dev_efficiency_pct",
         )
-        dev_discount_rate_pct = st.number_input(
-            "Target discount rate (%)",
-            min_value=0.0,
-            max_value=100.0,
-            value=8.0,
-            step=0.25,
-            key="dev_discount_rate_pct",
-        )
     with project_col_3:
         dev_cost_inflation_pct = st.number_input(
             "Construction-cost inflation (%)",
@@ -1165,14 +1134,6 @@ def render_development_workflow() -> None:
             value=10.0,
             step=0.5,
             key="dev_professional_fees_pct",
-        )
-        dev_contingency_pct = st.number_input(
-            "Contingency (% of construction)",
-            min_value=0.0,
-            max_value=100.0,
-            value=7.5,
-            step=0.5,
-            key="dev_contingency_pct",
         )
         dev_selling_cost_pct = st.number_input(
             "Selling costs (% of GDV)",
@@ -2123,6 +2084,127 @@ st.segmented_control(
     ),
 )
 
+with st.sidebar:
+    if investment_strategy == "Core Acquisition":
+        st.header("Deal")
+        property_name = st.text_input(
+            "Property name",
+            "Limmat Residential Case",
+            key="property_name",
+        )
+        location = st.text_input(
+            "Location",
+            "Zürich, Switzerland",
+            key="location",
+        )
+        st.divider()
+        st.header("Investment criteria")
+        target_unlevered_pct = st.number_input(
+            "Target unlevered IRR (%)",
+            min_value=0.0,
+            value=6.0,
+            step=0.25,
+            key="target_unlevered_pct",
+        )
+        target_levered_pct = st.number_input(
+            "Target levered IRR (%)",
+            min_value=0.0,
+            value=8.0,
+            step=0.25,
+            key="target_levered_pct",
+        )
+        minimum_dscr = st.number_input(
+            "Minimum DSCR (x)",
+            min_value=0.0,
+            value=1.30,
+            step=0.05,
+            key="minimum_dscr",
+        )
+        margin_of_safety_pct = st.number_input(
+            "Margin of safety (%)",
+            min_value=0.0,
+            value=5.0,
+            step=0.5,
+            key="margin_of_safety_pct",
+        )
+        sidebar_note = (
+            "These thresholds drive the Core acquisition recommendation and "
+            "maximum supportable price."
+        )
+    elif investment_strategy == "Value-Add / Repositioning":
+        st.header("Project")
+        st.text_input(
+            "Project name",
+            "Zürich Residential Repositioning",
+            key="va_name",
+        )
+        st.text_input(
+            "Location",
+            "Zürich, Switzerland",
+            key="va_location",
+        )
+        st.divider()
+        st.header("Investment criteria")
+        st.number_input(
+            "Target unlevered IRR (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=7.0,
+            step=0.25,
+            key="va_target_unlevered_pct",
+        )
+        st.number_input(
+            "Target levered IRR (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=10.0,
+            step=0.25,
+            key="va_target_levered_pct",
+        )
+        sidebar_note = (
+            "These return hurdles drive the Value-Add pricing limit after "
+            "renovation, stabilization and financing."
+        )
+    else:
+        st.header("Development project")
+        st.text_input(
+            "Project name",
+            "Limmat Development Site",
+            key="dev_project_name",
+        )
+        st.text_input(
+            "Location",
+            "Zürich, Switzerland",
+            key="dev_location",
+        )
+        st.divider()
+        st.header("Decision criteria")
+        st.number_input(
+            "Target discount rate (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=8.0,
+            step=0.25,
+            key="dev_discount_rate_pct",
+        )
+        st.number_input(
+            "Construction contingency (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=7.5,
+            step=0.5,
+            key="dev_contingency_pct",
+        )
+        sidebar_note = (
+            "The discount rate and contingency directly affect residual land "
+            "value and the maximum supportable land price."
+        )
+    st.divider()
+    st.caption(sidebar_note)
+    st.caption(
+        "All calculations are transparent and based on the assumptions shown in the app."
+    )
+
 if investment_strategy == "Ground-Up Development":
     render_development_workflow()
     st.stop()
@@ -2130,53 +2212,6 @@ if investment_strategy == "Ground-Up Development":
 if investment_strategy == "Value-Add / Repositioning":
     render_value_add_workflow()
     st.stop()
-
-with st.sidebar:
-    st.header("Deal")
-    property_name = st.text_input(
-        "Property name",
-        "Limmat Residential Case",
-        key="property_name",
-    )
-    location = st.text_input(
-        "Location",
-        "Zürich, Switzerland",
-        key="location",
-    )
-    st.divider()
-    st.header("Investment criteria")
-    target_unlevered_pct = st.number_input(
-        "Target unlevered IRR (%)",
-        min_value=0.0,
-        value=6.0,
-        step=0.25,
-        key="target_unlevered_pct",
-    )
-    target_levered_pct = st.number_input(
-        "Target levered IRR (%)",
-        min_value=0.0,
-        value=8.0,
-        step=0.25,
-        key="target_levered_pct",
-    )
-    minimum_dscr = st.number_input(
-        "Minimum DSCR (x)",
-        min_value=0.0,
-        value=1.30,
-        step=0.05,
-        key="minimum_dscr",
-    )
-    margin_of_safety_pct = st.number_input(
-        "Margin of safety (%)",
-        min_value=0.0,
-        value=5.0,
-        step=0.5,
-        key="margin_of_safety_pct",
-    )
-    st.divider()
-    st.caption(
-        "All calculations are transparent and based on the assumptions shown in the app."
-    )
 
 core_quick_view = st.session_state.get("analysis_depth") == "Quick underwriting"
 if core_quick_view:
