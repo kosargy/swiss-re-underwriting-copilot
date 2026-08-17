@@ -13,6 +13,7 @@ from development import (
     compare_development_plans,
     development_sensitivity_grid,
 )
+from strategy_memo import build_development_memo, build_value_add_memo
 from underwriting import (
     FinancingAssumptions,
     InvestmentCriteria,
@@ -477,6 +478,15 @@ def render_value_add_workflow() -> None:
         "The maximum purchase price is the price that makes NPV equal to zero "
         "at the selected discount rate. It is not a certified valuation."
     )
+    value_add_memo = build_value_add_memo(result)
+    st.download_button(
+        "Download Value-Add Investment Committee memo (PDF)",
+        data=value_add_memo,
+        file_name="value_add_investment_committee_memo.pdf",
+        mime="application/pdf",
+        use_container_width=True,
+        key="download_value_add_memo",
+    )
 
 
 def render_development_workflow() -> None:
@@ -885,6 +895,19 @@ def render_development_workflow() -> None:
                 f"{chf(comparison.expected_maximum_land_price)}."
             )
 
+        development_memo = build_development_memo(
+            development_project,
+            comparison,
+        )
+        st.download_button(
+            "Download Development Investment Committee memo (PDF)",
+            data=development_memo,
+            file_name="development_investment_committee_memo.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key="download_development_memo",
+        )
+
         comparison_frame = pd.DataFrame(
             [
                 {
@@ -1060,7 +1083,7 @@ def render_development_workflow() -> None:
 st.title("Swiss Real Estate Underwriting Copilot")
 st.caption(
     "Decision support for core acquisitions, value-add strategies and "
-    "ground-up developments · Portfolio MVP v0.7"
+    "ground-up developments · Portfolio MVP v0.8"
 )
 if loaded_name := st.session_state.pop("_loaded_deal_notice", None):
     st.success(f"Loaded saved deal: {loaded_name}")

@@ -48,6 +48,9 @@ Only the workflow relevant to the selected strategy is displayed.
 - Maximum supportable acquisition price and break-even renovation budget
 - Value-Add unlevered/levered IRR, equity multiple and stabilized DSCR
 - Renovation-cost/stabilized-rent sensitivity matrix
+- Strategy-specific Investment Committee memos for Core, Value-Add and Development
+- Executive decision narrative, principal risks and required due diligence
+- Downloadable maximum-bid recommendation for every investment strategy
 
 Core calculations are separated from the user interface so an interviewer can
 audit the methodology instead of treating the outputs as a black box.
