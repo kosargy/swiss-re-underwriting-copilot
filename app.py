@@ -153,6 +153,49 @@ def percentage(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.2%}"
 
 
+def render_executive_summary(
+    *,
+    recommendation: str,
+    asking_price: float,
+    maximum_price: float,
+    return_label: str,
+    return_value: str,
+    thesis: str,
+    primary_risk: str,
+    next_action: str,
+) -> None:
+    """Present the investment conclusion before the detailed underwriting."""
+    st.markdown("##### Executive Deal Summary")
+    if recommendation.startswith(("ATTRACTIVE", "FEASIBLE")):
+        st.success(recommendation)
+    elif recommendation.startswith("NEGOTIATE"):
+        st.warning(recommendation)
+    else:
+        st.error(recommendation)
+
+    price_gap = maximum_price - asking_price
+    summary_1, summary_2, summary_3 = st.columns(3)
+    summary_1.metric("Seller asking price", chf(asking_price))
+    summary_2.metric(
+        "Maximum supportable price",
+        chf(maximum_price),
+        chf(price_gap),
+        help="Positive means headroom; negative means the asking price exceeds the model limit.",
+    )
+    summary_3.metric(return_label, return_value)
+
+    narrative_1, narrative_2, narrative_3 = st.columns(3, border=True)
+    with narrative_1:
+        st.markdown("**Investment thesis**")
+        st.write(thesis)
+    with narrative_2:
+        st.markdown("**Primary risk**")
+        st.write(primary_risk)
+    with narrative_3:
+        st.markdown("**Recommended next action**")
+        st.write(next_action)
+
+
 def _project_snapshot_bytes(
     *,
     strategy: str,
@@ -713,6 +756,50 @@ def render_value_add_workflow() -> None:
 
     st.divider()
     st.markdown("#### 4 · Investment decision")
+    stabilized_noi_growth = (
+        result.stabilized_noi / result.current_noi - 1
+        if result.current_noi > 0
+        else 0.0
+    )
+    if result.minimum_stabilized_dscr is not None and result.minimum_stabilized_dscr < 1.25:
+        value_add_risk = (
+            f"Debt coverage reaches only {result.minimum_stabilized_dscr:.2f}x, "
+            "leaving limited protection against operating underperformance."
+        )
+    elif result.levered_irr is None or result.levered_irr < value_add_project.target_levered_irr:
+        value_add_risk = (
+            "The levered return does not meet the selected target under the base-case "
+            "renovation and exit assumptions."
+        )
+    else:
+        value_add_risk = (
+            "Execution depends on delivering the renovation budget, stabilized rent "
+            "and exit cap rate without material slippage."
+        )
+    if result.project_npv_at_asking_price >= 0:
+        value_add_next_action = (
+            "Proceed to technical, lease and CapEx due diligence, while keeping the "
+            f"purchase price at or below {chf(result.maximum_supportable_purchase_price)}."
+        )
+    else:
+        value_add_next_action = (
+            f"Reprice the offer to no more than {chf(result.maximum_supportable_purchase_price)} "
+            "or revise the business plan before proceeding."
+        )
+    render_executive_summary(
+        recommendation=result.recommendation,
+        asking_price=va_purchase_price,
+        maximum_price=result.maximum_supportable_purchase_price,
+        return_label="Levered IRR",
+        return_value=percentage(result.levered_irr),
+        thesis=(
+            f"The plan increases NOI by {stabilized_noi_growth:.1%} and creates "
+            f"{chf(result.incremental_value_created)} of value after renovation CapEx."
+        ),
+        primary_risk=value_add_risk,
+        next_action=value_add_next_action,
+    )
+    st.markdown("##### Detailed underwriting")
     decision_1, decision_2, decision_3, decision_4 = st.columns(4)
     decision_1.metric("As-is value", chf(result.as_is_value))
     decision_2.metric("Stabilized value", chf(result.stabilized_value))
@@ -734,28 +821,6 @@ def render_value_add_workflow() -> None:
             else f"{result.minimum_stabilized_dscr:.2f}x"
         ),
     )
-
-    if result.recommendation.startswith("ATTRACTIVE"):
-        st.success(result.recommendation)
-    elif result.recommendation.startswith("FEASIBLE"):
-        st.success(result.recommendation)
-    elif result.recommendation.startswith("NEGOTIATE"):
-        st.warning(result.recommendation)
-    else:
-        st.error(result.recommendation)
-
-    if result.project_npv_at_asking_price >= 0:
-        st.info(
-            f"The current asking price is supportable under the base case. "
-            f"The model indicates a maximum purchase price of approximately "
-            f"{chf(result.maximum_supportable_purchase_price)}."
-        )
-    else:
-        st.info(
-            f"The current asking price is not supportable under the base case. "
-            f"A price at or below approximately "
-            f"{chf(result.maximum_supportable_purchase_price)} is required."
-        )
 
     st.markdown("#### Value-creation bridge")
     bridge_1, bridge_2, bridge_3, bridge_4 = st.columns(4)
@@ -1258,6 +1323,45 @@ def render_development_workflow() -> None:
         )
         st.divider()
         st.markdown("#### 3 · Feasibility decision")
+        preferred_analysis = next(
+            analysis
+            for analysis in comparison.analyses
+            if analysis.plan.name == comparison.preferred_plan_name
+        )
+        development_recommendation = (
+            "FEASIBLE — PROCEED TO SITE DUE DILIGENCE"
+            if comparison.expected_npv_at_asking_price >= 0
+            else (
+                "NEGOTIATE LAND PRICE"
+                if dev_asking_land_price <= comparison.expected_maximum_land_price * 1.10
+                else "NOT FEASIBLE AT CURRENT LAND PRICE"
+            )
+        )
+        development_next_action = (
+            "Confirm planning, construction-cost and market assumptions before "
+            f"committing more than {chf(comparison.expected_maximum_land_price)} for the land."
+            if comparison.expected_npv_at_asking_price >= 0
+            else
+            f"Reduce the land offer to no more than {chf(comparison.expected_maximum_land_price)} "
+            "or redesign the development concept."
+        )
+        render_executive_summary(
+            recommendation=development_recommendation,
+            asking_price=dev_asking_land_price,
+            maximum_price=comparison.expected_maximum_land_price,
+            return_label=f"{comparison.preferred_plan_name} IRR",
+            return_value=percentage(preferred_analysis.project_irr_at_asking_price),
+            thesis=(
+                f"{comparison.preferred_plan_name} produces the highest residual value, "
+                f"with a maximum land price of {chf(preferred_analysis.maximum_supportable_land_price)}."
+            ),
+            primary_risk=(
+                "Residual land value is highly sensitive to construction-cost overruns, "
+                "sales/rental assumptions and planning delays."
+            ),
+            next_action=development_next_action,
+        )
+        st.markdown("##### Detailed feasibility")
         decision_1, decision_2, decision_3, decision_4 = st.columns(4)
         decision_1.metric(
             "Expected maximum land price",
@@ -1269,20 +1373,6 @@ def render_development_workflow() -> None:
             chf(comparison.expected_npv_at_asking_price),
         )
         decision_4.metric("Highest-value plan", comparison.preferred_plan_name)
-
-        if comparison.expected_npv_at_asking_price >= 0:
-            st.success(
-                f"At the current assumptions, the land is financially supportable. "
-                f"Do not pay more than approximately "
-                f"{chf(comparison.expected_maximum_land_price)} on a "
-                "probability-weighted basis."
-            )
-        else:
-            st.error(
-                f"The asking price is too high under the current assumptions. "
-                f"A probability-weighted maximum price is approximately "
-                f"{chf(comparison.expected_maximum_land_price)}."
-            )
 
         development_memo = build_development_memo(
             development_project,
@@ -1416,11 +1506,6 @@ def render_development_workflow() -> None:
                 )
 
         st.markdown("#### 4 · Sensitivity of the preferred plan")
-        preferred_analysis = next(
-            analysis
-            for analysis in comparison.analyses
-            if analysis.plan.name == comparison.preferred_plan_name
-        )
         sensitivity_points = development_sensitivity_grid(
             development_project,
             preferred_analysis.plan,
